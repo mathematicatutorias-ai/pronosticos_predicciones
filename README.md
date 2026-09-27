@@ -1,85 +1,33 @@
-# Forecast Local · Polymarket v0.1
+# Forecast Local · Polymarket v0.2
 
-Aplicación estática para GitHub Pages. GitHub entrega únicamente HTML/CSS/JS; las consultas, el almacenamiento y la inferencia ocurren en el navegador del usuario.
+Corrección de navegación del MVP.
+
+## Qué cambió respecto a v0.1
+
+- Un resultado de búsqueda abre el workspace **inmediatamente** con la metadata ya recibida por `public-search`.
+- Si esa respuesta ya incluye mercados + token IDs, no se hace una segunda consulta bloqueante a Gamma.
+- Si falta metadata, se intenta `/events/{id}`, `/events?id=...` y `/events?slug=...` en segundo plano.
+- El histórico del mercado seleccionado se descarga primero y el gráfico aparece tan pronto como está listo.
+- Las siguientes 3 series se descargan en paralelo, sin bloquear la interfaz.
+- Estados de carga/error visibles tanto globalmente como sobre el gráfico.
+- Se eliminó la falsa barra de búsqueda central; existe un único buscador real, arriba.
+- Resultados accesibles por clic, Enter o espacio.
 
 ## Arquitectura
 
-```text
-GitHub Pages
-   │
-   └── código estático
-          │
-          ├── Gamma API -> búsqueda / eventos / metadata
-          ├── CLOB API  -> históricos de precios
-          ├── IndexedDB -> históricos + metadata locales (TTL 7 días)
-          ├── Chronos-2 -> iframe aislado -> ORT WASM / CPU
-          └── TimesFM-3 -> iframe aislado -> ORT WebGPU / GPU
-```
+GitHub Pages solo entrega código. El navegador usa Gamma/CLOB, IndexedDB y los runtimes ONNX locales.
 
-Los dos runtimes ONNX están físicamente separados porque esa fue la configuración probada:
-- Chronos-2: `ort.min.js` + WASM estándar.
-- TimesFM-3: `ort.webgpu.min.js` + WebGPU.
-
-## Funciones del MVP
-
-- Buscador global usando Gamma.
-- Eventos y mercados.
-- Fotos/iconos desde metadata Gamma cuando existan.
-- Histórico CLOB.
-- Regularización a 6 horas en navegador.
-- IndexedDB con actualización incremental del histórico.
-- TTL de 7 días para datos históricos.
-- Plotly con múltiples outcomes/mercados.
-- Selección de mercado.
-- Forecast futuro 20% del histórico, máximo 64 pasos.
-- Chronos-2 local.
-- TimesFM-3 local.
-- Comparación temporal 70/15/15 sobre TEST (MAE/RMSE).
-- Cache Storage opcional para los archivos ONNX.
-- Botones para borrar datos, modelos o todo.
+Chronos-2: ORT WASM/CPU aislado.
+TimesFM-3: ORT WebGPU aislado.
 
 ## Publicar
 
-Descomprime el ZIP en la raíz del repositorio y activa:
+Descomprime el ZIP en la raíz del repo y reemplaza los archivos de v0.1. No requiere build. Haz Ctrl+F5 una vez desplegada.
 
-```text
-Settings -> Pages -> Deploy from a branch -> main -> /(root)
-```
+## Prueba mínima
 
-No requiere build.
-
-## Importante: primera prueba
-
-Primero prueba:
-1. búsqueda de un mercado;
-2. abrir un evento;
-3. verificar que aparece el histórico;
-4. luego probar Chronos;
-5. luego TimesFM.
-
-La última compatibilidad que falta validar es CORS de Gamma/CLOB desde tu dominio de GitHub Pages. El código muestra el error directamente si algún endpoint lo bloquea.
-
-## Almacenamiento
-
-### Datos Polymarket
-IndexedDB:
-- search
-- events
-- history
-
-El histórico se conserva 7 días y luego se purga si ya no se utiliza.
-
-### Modelos
-Cuando "Conservar modelos descargados" está activo, los workers intentan guardar:
-- Chronos ONNX
-- TimesFM ONNX + external data
-
-en `Cache Storage` (`forecast-local-models-v1`).
-
-Si el almacenamiento de un modelo grande falla por cuota, el runtime cae a la ruta URL normal y sigue intentando la inferencia.
-
-## Nota metodológica
-
-Los modelos pronostican la trayectoria del precio/probabilidad implícita del mercado. No son una predicción independiente de la resolución del evento.
-
-La comparación de modelos usa error fuera de muestra del tramo TEST; no es una evaluación de candidatos u opciones políticas.
+1. Escribe `elec`.
+2. Haz clic en `Brazil Presidential Election`.
+3. Debe abrirse inmediatamente la pantalla del evento, aun antes de terminar de bajar históricos.
+4. Debes ver mensajes `Cargando histórico...` sobre el gráfico.
+5. Luego deben aparecer progresivamente las líneas.

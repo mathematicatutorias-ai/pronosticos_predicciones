@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Forecast Local</title>
-  <link rel="stylesheet" href="./styles.css?v=0.1.0">
+  <link rel="stylesheet" href="./styles.css?v=0.2.0">
   <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body>
@@ -27,15 +27,14 @@
     <div class="local-pill"><span></span> Local</div>
   </header>
 
+  <div id="openStatus" class="open-status" hidden></div>
+
   <main id="landing" class="landing">
     <div class="landing-inner">
       <div class="landing-kicker">DATOS + MODELOS · EN TU DISPOSITIVO</div>
       <h1>Consulta cualquier mercado.<br>Analízalo localmente.</h1>
       <p>Busca eventos y mercados públicos. El navegador descarga los datos, guarda el histórico localmente y ejecuta los modelos en tu CPU/GPU.</p>
-      <div class="landing-search" onclick="document.getElementById('searchInput').focus()">
-        <span>⌕</span>
-        <span>Buscar en Polymarket…</span>
-      </div>
+      <button id="focusTopSearch" class="landing-cta">Buscar un mercado ↑</button>
       <div class="landing-foot">
         <span>Sin cuenta</span><i></i><span>Sin servidor de inferencia</span><i></i><span>Datos locales borrables</span>
       </div>
@@ -69,6 +68,7 @@
             <button data-range="0" class="active">TODO</button>
           </div>
         </div>
+        <div id="chartStatus" class="chart-status" hidden></div>
         <div id="chart" class="chart"></div>
         <div class="chart-foot">
           <span id="volumeTotal">Volumen —</span>
@@ -172,10 +172,10 @@
   <div id="toast" class="toast" hidden></div>
 
   <!-- Runtimes físicamente aislados, como en el POC exitoso -->
-  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.1.0" hidden></iframe>
-  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.1.0" hidden></iframe>
+  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.2.0" hidden></iframe>
+  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.2.0" hidden></iframe>
 </div>
 
-<script type="module" src="./app.js?v=0.1.0"></script>
+<script type="module" src="./app.js?v=0.2.0"></script>
 </body>
 </html>

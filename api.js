@@ -1,4 +1,4 @@
-import {getItem,putItem} from "./db.js?v=0.1.0";
+import {getItem,putItem} from "./db.js?v=0.2.0";
 
 const GAMMA="https://gamma-api.polymarket.com";
 const CLOB="https://clob.polymarket.com";
@@ -46,7 +46,7 @@ export function marketView(m){
   };
 }
 
-function eventView(e){
+export function eventView(e){
   const markets=(e.markets||[]).map(marketView);
   return {
     raw:e,
@@ -98,6 +98,25 @@ function normalizeSearch(data){
   }).slice(0,18);
 }
 
+export function previewSearchItem(item){
+  if(!item) return null;
+  if(item.kind==="event" && item.raw){
+    const ev=eventView(item.raw);
+    if(ev.title) return ev;
+  }
+  if(item.kind==="market" && item.raw){
+    const m=item.raw;
+    const nested=(m.events&&m.events[0])||null;
+    if(nested){
+      const ev=eventView({...nested,markets:nested.markets||[]});
+      if(ev.markets.length) return ev;
+    }
+    const mv=marketView(m);
+    return {id:`market-${mv.id}`,slug:mv.slug,title:mv.question||mv.title,image:mv.image,active:mv.active,closed:mv.closed,volume:mv.volume,liquidity:0,endDate:mv.endDate,tags:[],markets:[mv],raw:m};
+  }
+  return null;
+}
+
 export async function searchPolymarket(query){
   const q=query.trim();
   if(q.length<2) return [];
@@ -133,14 +152,27 @@ export async function searchPolymarket(query){
 }
 
 export async function loadSearchItem(item){
+  const preview=previewSearchItem(item);
+
+  // public-search often already returns the complete event with its markets.
+  // If it has usable token IDs, do NOT block the click with a second request.
+  if(preview?.markets?.length && preview.markets.some(m=>m.yesToken)){
+    const key=`event:${preview.id||preview.slug}`;
+    await putItem("events",key,preview,{ttlMs:EVENT_TTL});
+    return preview;
+  }
+
   if(item.kind==="event"){
     const key=`event:${item.id||item.slug}`;
     const cached=await getItem("events",key);
     if(cached) return cached.value;
 
     const urls=[];
-    if(item.id) urls.push(`${GAMMA}/events/${encodeURIComponent(item.id)}`);
-    if(item.slug) urls.push(`${GAMMA}/events?slug=${encodeURIComponent(item.slug)}`);
+    if(item.id){
+      urls.push(`${GAMMA}/events/${encodeURIComponent(item.id)}`);
+      urls.push(`${GAMMA}/events?id=${encodeURIComponent(item.id)}&limit=1`);
+    }
+    if(item.slug) urls.push(`${GAMMA}/events?slug=${encodeURIComponent(item.slug)}&limit=1`);
 
     let lastErr=null;
     for(const u of urls){
@@ -149,25 +181,19 @@ export async function loadSearchItem(item){
         if(Array.isArray(data)) data=data[0];
         if(data){
           const ev=eventView(data);
-          await putItem("events",key,ev,{ttlMs:EVENT_TTL});
-          return ev;
+          if(ev.markets.length){
+            await putItem("events",key,ev,{ttlMs:EVENT_TTL});
+            return ev;
+          }
         }
       }catch(e){lastErr=e}
     }
-    throw lastErr||new Error("No pude abrir el evento.");
+    if(preview?.markets?.length) return preview;
+    throw lastErr||new Error("No pude obtener los mercados del evento.");
   }
 
-  // Market result; use nested event if present, otherwise pseudo-event.
-  const m=item.raw;
-  const ev=(m.events&&m.events[0])||null;
-  if(ev?.id||ev?.slug){
-    return loadSearchItem({kind:"event",id:String(ev.id||""),slug:ev.slug||"",raw:ev});
-  }
-  const mv=marketView(m);
-  return {
-    id:`market-${mv.id}`,slug:mv.slug,title:mv.question||mv.title,image:mv.image,
-    active:mv.active,closed:mv.closed,volume:mv.volume,liquidity:0,endDate:mv.endDate,tags:[],markets:[mv],raw:m
-  };
+  if(preview) return preview;
+  throw new Error("No pude interpretar este resultado.");
 }
 
 function mergeHistory(a,b){

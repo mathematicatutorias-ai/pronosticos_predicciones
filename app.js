@@ -1,6 +1,6 @@
-import {searchPolymarket,loadSearchItem,getTokenHistory} from "./api.js?v=0.1.0";
-import {clearAllData,pruneExpired,storageEstimate,countStore} from "./db.js?v=0.1.0";
-import {runChronos,runTimesFM,clearModelCaches} from "./model-bridge.js?v=0.1.0";
+import {searchPolymarket,loadSearchItem,getTokenHistory,previewSearchItem} from "./api.js?v=0.2.0";
+import {clearAllData,pruneExpired,storageEstimate,countStore} from "./db.js?v=0.2.0";
+import {runChronos,runTimesFM,clearModelCaches} from "./model-bridge.js?v=0.2.0";
 
 const $=id=>document.getElementById(id);
 const COLORS=["#2f6bff","#67a8ff","#f5b400","#ff7a00","#12b76a","#7a4cff","#e83e8c","#475467"];
@@ -21,6 +21,16 @@ function fmtDate(x){
 }
 function toast(msg,ms=2800){
   const el=$("toast");el.textContent=msg;el.hidden=false;clearTimeout(el._t);el._t=setTimeout(()=>el.hidden=true,ms);
+}
+function globalStatus(msg,type=""){
+  const el=$("openStatus");
+  if(!msg){el.hidden=true;el.className="open-status";return}
+  el.textContent=msg;el.hidden=false;el.className=`open-status ${type}`.trim();
+}
+function chartStatus(msg,type=""){
+  const el=$("chartStatus");
+  if(!msg){el.hidden=true;el.className="chart-status";return}
+  el.textContent=msg;el.hidden=false;el.className=`chart-status ${type}`.trim();
 }
 function imgFallback(img){
   img.onerror=()=>{img.onerror=null;img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100%' height='100%' fill='#f2f4f7'/><path d='M25 60 L50 32 L75 60' fill='none' stroke='#98a2b3' stroke-width='7'/></svg>`)};
@@ -50,14 +60,16 @@ async function doSearch(q){
     const items=await searchPolymarket(q);
     if(!items.length){box.innerHTML=`<div class="search-empty">Sin resultados.</div>`;return}
     box.innerHTML=items.map((x,i)=>`
-      <div class="search-result" data-i="${i}">
+      <div class="search-result" data-i="${i}" role="button" tabindex="0">
         <img src="${x.image||""}" alt="">
         <div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.sub||"")}</small></div>
         <span class="result-kind">${x.kind==="event"?"evento":"mercado"}</span>
       </div>`).join("");
     [...box.querySelectorAll(".search-result")].forEach((el)=>{
       imgFallback(el.querySelector("img"));
-      el.onclick=()=>openItem(items[+el.dataset.i]);
+      const activate=()=>openItem(items[+el.dataset.i]);
+      el.addEventListener("click",activate);
+      el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();activate();}});
     });
   }catch(e){box.innerHTML=`<div class="search-empty">Error de API: ${escapeHtml(e.message)}</div>`}
 }
@@ -65,30 +77,88 @@ function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;",
 
 async function openItem(item){
   $("searchResults").hidden=true;
-  setStatus("Abriendo evento y descargando históricos…","running");
+  $("searchInput").blur();
+  globalStatus("Abriendo mercado…");
+
+  // 1) Render inmediato con lo que ya devolvió public-search.
+  const preview=previewSearchItem(item);
+  if(preview){
+    state.event=preview;
+    state.event.markets=[...(preview.markets||[])].sort((a,b)=>b.yesPrice-a.yesPrice);
+    state.selected=state.event.markets[0]||null;
+    state.forecasts={};
+    $("landing").hidden=true;
+    $("workspace").hidden=false;
+    renderEvent();
+    renderChart();
+    chartStatus("Cargando metadata e históricos…");
+  }
+
   try{
+    // 2) Enriquecer si hace falta. Si public-search ya traía todo, esto retorna sin otra consulta.
     const ev=await loadSearchItem(item);
     state.event=ev;
-    const markets=[...ev.markets].sort((a,b)=>b.yesPrice-a.yesPrice);
-    state.event.markets=markets;
-    state.selected=markets[0]||null;
-    state.forecasts={};
-    $("landing").hidden=true;$("workspace").hidden=false;
+    state.event.markets=[...(ev.markets||[])].sort((a,b)=>b.yesPrice-a.yesPrice);
+    if(!state.selected || !state.event.markets.some(m=>m.id===state.selected.id)){
+      state.selected=state.event.markets[0]||null;
+    }else{
+      state.selected=state.event.markets.find(m=>m.id===state.selected.id)||state.event.markets[0]||null;
+    }
+    $("landing").hidden=true;
+    $("workspace").hidden=false;
     renderEvent();
+    renderChart();
 
-    const initial=markets.slice(0,Math.min(4,markets.length));
-    for(const m of initial){
-      try{state.histories.set(m.yesToken,await getTokenHistory(m.yesToken))}catch(e){console.warn("history",m.title,e)}
-      renderChart();
+    if(!state.event.markets.length){
+      throw new Error("El evento no devolvió mercados analizables.");
     }
-    if(state.selected && !state.histories.has(state.selected.yesToken)){
-      state.histories.set(state.selected.yesToken,await getTokenHistory(state.selected.yesToken));
+
+    // 3) Primero el mercado seleccionado: el gráfico aparece cuanto antes.
+    if(state.selected?.yesToken){
+      chartStatus(`Descargando histórico de ${state.selected.title}…`);
+      try{
+        state.histories.set(state.selected.yesToken,await getTokenHistory(state.selected.yesToken));
+        renderChart();
+        chartStatus("Histórico principal cargado. Completando otras series…","ok");
+      }catch(e){
+        console.warn("selected history",e);
+        chartStatus(`No pude cargar el histórico principal: ${e.message}`,"error");
+      }
     }
-    renderChart();renderSelected();
+
+    // 4) Las otras tres series se cargan en paralelo y NO bloquean la pantalla.
+    const rest=state.event.markets
+      .filter(m=>m.yesToken && m.id!==state.selected?.id)
+      .slice(0,3);
+
+    let done=0;
+    await Promise.allSettled(rest.map(async m=>{
+      try{
+        const h=await getTokenHistory(m.yesToken);
+        state.histories.set(m.yesToken,h);
+      }finally{
+        done++;
+        chartStatus(`Cargando series ${done}/${rest.length}…`);
+        renderChart();
+      }
+    }));
+
+    renderSelected();
+    renderChart();
+    chartStatus("");
+    globalStatus("Mercado cargado","ok");
+    setTimeout(()=>globalStatus(""),1200);
     $("forecastStatus").hidden=true;
     await refreshStorage();
   }catch(e){
-    setStatus(`No pude abrir el mercado: ${e.message}`,"error");
+    console.error("openItem",e);
+    globalStatus(`Error: ${e.message}`,"error");
+    if(state.event){
+      chartStatus(`No pude completar la carga: ${e.message}`,"error");
+    }else{
+      $("landing").hidden=false;
+      $("workspace").hidden=true;
+    }
     toast(e.message,5000);
   }
 }
@@ -253,6 +323,11 @@ async function refreshStorage(){
   const h=await countStore("history");$("dataCacheStatus").textContent=`${h} series`;
   try{const c=await caches.open("forecast-local-models-v1");const keys=await c.keys();$("modelCacheStatus").textContent=`${keys.length} archivos`}catch{}
 }
+
+$("focusTopSearch")?.addEventListener("click",()=>{
+  $("searchInput").focus();
+  window.scrollTo({top:0,behavior:"smooth"});
+});
 
 $("searchInput").addEventListener("input",e=>{
   const q=e.target.value;$("searchClear").hidden=!q;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>doSearch(q),350);
