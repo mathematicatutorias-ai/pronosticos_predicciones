@@ -1,97 +1,30 @@
-# Chronos-2 + TimesFM 3.0 · WebGPU POC v3
+# POC v4 — Chronos CPU + TimesFM WebGPU
 
-Esta versión añade fallback automático para Chronos.
+Decisión de esta versión:
 
-## TimesFM
+- Chronos-2 → WASM / CPU local
+- TimesFM-3 → WebGPU / Intel Graphics
 
-No cambia la ruta que ya dio PASS:
+El export `TSFM-ai/chronos-2-onnx` documenta ejecución funcional en navegador con ONNX Runtime Web WASM. Por eso esta versión deja de forzar WebGPU para Chronos.
 
-```text
-TimesFM 3.0 ONNX
-→ ONNX Runtime Web
-→ WebGPU
-→ Intel Graphics
-```
+## Verificación de versión
 
-## Chronos
+La página debe mostrar:
 
-La estrategia ahora es:
+BUILD v4.0.0
 
-```text
-1. WebGPU
-   ↓ si un nodo queda sin proveedor
-2. WebGPU + forceCpuNodeNames
-   ↓ reintenta agregando nodos identificados por ORT
-3. WASM / CPU local
-```
+y el botón:
 
-El primer nodo ya observado se fuerza desde el inicio:
+Ejecutar Chronos-2 en CPU
 
-```text
-/model/Cast_3
-```
+Además `index.html` carga `app.js?v=4.0.0` para romper caché.
 
-Si ORT reporta otro nodo con el mismo patrón de error, la página intenta
-extraer su nombre automáticamente y vuelve a crear la sesión.
+## Probar
 
-Si la sesión WebGPU/híbrida no puede crearse después de los reintentos,
-la página carga el mismo `model.onnx` con:
-
-```js
-executionProviders: ["wasm"]
-```
-
-Todo sigue ejecutándose localmente en el navegador.
-
-## Interpretación del resultado
-
-### PASS + `webgpu`
-
-Todo Chronos corrió por WebGPU.
-
-### PASS + `webgpu-híbrido`
-
-La sesión usa WebGPU y los nodos indicados se derivan a CPU.
-
-### PASS + `wasm / cpu`
-
-Este export de Chronos no funcionó con WebGPU en este navegador,
-pero sí funciona completamente en CPU local.
-
-### FAIL
-
-Falló también el fallback CPU; copia el log completo.
-
-## GitHub Pages
-
-Reemplaza el contenido de tu repositorio actual por el contenido del ZIP:
-
-```text
-index.html
-app.js
-styles.css
-data/
-.nojekyll
-README.md
-```
-
-y deja GitHub Pages apuntando a:
-
-```text
-main / (root)
-```
-
-No necesitas cambiar ninguna configuración de Pages.
-
-## Orden recomendado
-
-1. Recarga la página.
-2. Ejecuta Chronos con 1 repetición.
-3. Mira `Backend final`.
-4. Si PASS, prueba con 3 repeticiones.
-5. TimesFM se puede volver a probar para confirmar que sigue igual.
-
-## Nota
-
-`forceCpuNodeNames` es una opción oficial de WebGPU EP de ONNX Runtime Web.
-El fallback WASM también es un execution provider oficial de ONNX Runtime Web.
+1. Sube el contenido del ZIP a la raíz del repo.
+2. Espera a que termine GitHub Pages.
+3. Abre la página y confirma v4.0.0.
+4. Repeticiones = 1.
+5. Ejecuta Chronos.
+6. Si PASS CPU, prueba 3 repeticiones.
+7. TimesFM queda igual que en el POC que ya dio PASS.
