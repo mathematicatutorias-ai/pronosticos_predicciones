@@ -1,10 +1,26 @@
-import {searchPolymarket,loadSearchItem,getTokenHistory,previewSearchItem} from "./api.js?v=0.2.0";
-import {clearAllData,pruneExpired,storageEstimate,countStore} from "./db.js?v=0.2.0";
-import {runChronos,runTimesFM,clearModelCaches} from "./model-bridge.js?v=0.2.0";
+import {searchPolymarket,loadSearchItem,getTokenHistory,previewSearchItem} from "./api.js?v=0.3.0";
+import {clearAllData,pruneExpired,storageEstimate,countStore} from "./db.js?v=0.3.0";
+import {runChronos,runTimesFM,clearModelCaches} from "./model-bridge.js?v=0.3.0";
 
 const $=id=>document.getElementById(id);
 const COLORS=["#2f6bff","#67a8ff","#f5b400","#ff7a00","#12b76a","#7a4cff","#e83e8c","#475467"];
 const state={event:null,selected:null,histories:new Map(),forecasts:{},rangeDays:0,searchTimer:null};
+
+function showLanding(){
+  const landing=$("landing"), workspace=$("workspace");
+  landing.hidden=false;
+  workspace.hidden=true;
+  landing.setAttribute("aria-hidden","false");
+  workspace.setAttribute("aria-hidden","true");
+}
+function showWorkspace(){
+  const landing=$("landing"), workspace=$("workspace");
+  landing.hidden=true;
+  workspace.hidden=false;
+  landing.setAttribute("aria-hidden","true");
+  workspace.setAttribute("aria-hidden","false");
+  window.scrollTo({top:0,behavior:"instant"});
+}
 
 function fmtPct(x){
   if(!Number.isFinite(+x))return "—";
@@ -87,8 +103,7 @@ async function openItem(item){
     state.event.markets=[...(preview.markets||[])].sort((a,b)=>b.yesPrice-a.yesPrice);
     state.selected=state.event.markets[0]||null;
     state.forecasts={};
-    $("landing").hidden=true;
-    $("workspace").hidden=false;
+    showWorkspace();
     renderEvent();
     renderChart();
     chartStatus("Cargando metadata e históricos…");
@@ -104,8 +119,7 @@ async function openItem(item){
     }else{
       state.selected=state.event.markets.find(m=>m.id===state.selected.id)||state.event.markets[0]||null;
     }
-    $("landing").hidden=true;
-    $("workspace").hidden=false;
+    showWorkspace();
     renderEvent();
     renderChart();
 
@@ -156,8 +170,7 @@ async function openItem(item){
     if(state.event){
       chartStatus(`No pude completar la carga: ${e.message}`,"error");
     }else{
-      $("landing").hidden=false;
-      $("workspace").hidden=true;
+      showLanding();
     }
     toast(e.message,5000);
   }
@@ -355,5 +368,6 @@ $("clearData").onclick=async()=>{await clearAllData();state.histories.clear();to
 $("clearModels").onclick=async()=>{await clearModelCaches();toast("Caché de modelos borrada.");refreshStorage()};
 $("clearAll").onclick=async()=>{await clearAllData();await clearModelCaches();state.histories.clear();state.forecasts={};toast("Almacenamiento local borrado.");renderChart();refreshStorage()};
 
+showLanding();
 await pruneExpired();
 await refreshStorage();

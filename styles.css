@@ -1,3 +1,9 @@
+
+/* v0.3 CRITICAL FIX:
+   Author CSS (.landing{display:flex}, .workspace{display:grid}) was overriding
+   the HTML hidden state in the deployed page. This rule makes hidden absolute. */
+[hidden] { display: none !important; }
+
 :root{
   --bg:#fff;--text:#111827;--muted:#667085;--line:#e7eaf0;--soft:#f7f8fb;
   --blue:#2f6bff;--blue2:#67a8ff;--green:#079455;--red:#d92d20;--purple:#7a4cff;

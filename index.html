@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Forecast Local</title>
-  <link rel="stylesheet" href="./styles.css?v=0.2.0">
+  <link rel="stylesheet" href="./styles.css?v=0.3.0">
   <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
 </head>
 <body>
@@ -24,7 +24,7 @@
       <div id="searchResults" class="search-results" hidden></div>
     </div>
 
-    <div class="local-pill"><span></span> Local</div>
+    <div class="local-pill"><span></span> Local <small style="opacity:.55;margin-left:5px">v0.3</small></div>
   </header>
 
   <div id="openStatus" class="open-status" hidden></div>
@@ -172,10 +172,10 @@
   <div id="toast" class="toast" hidden></div>
 
   <!-- Runtimes físicamente aislados, como en el POC exitoso -->
-  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.2.0" hidden></iframe>
-  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.2.0" hidden></iframe>
+  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.3.0" hidden></iframe>
+  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.3.0" hidden></iframe>
 </div>
 
-<script type="module" src="./app.js?v=0.2.0"></script>
+<script type="module" src="./app.js?v=0.3.0"></script>
 </body>
 </html>

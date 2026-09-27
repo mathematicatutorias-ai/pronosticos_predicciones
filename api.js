@@ -1,4 +1,4 @@
-import {getItem,putItem} from "./db.js?v=0.2.0";
+import {getItem,putItem} from "./db.js?v=0.3.0";
 
 const GAMMA="https://gamma-api.polymarket.com";
 const CLOB="https://clob.polymarket.com";

@@ -1,4 +1,31 @@
-# Forecast Local · Polymarket v0.2
+# Forecast Local · Polymarket v0.3
+
+## Corrección crítica respecto a v0.3
+
+La v0.3 **sí abría y cargaba el evento**, pero la portada seguía visible porque
+las reglas CSS:
+
+```css
+.landing { display:flex }
+.workspace { display:grid }
+```
+
+podían prevalecer visualmente sobre el estado `hidden` usado por JavaScript.
+
+v0.3 añade:
+
+```css
+[hidden] { display:none !important; }
+```
+
+y además cambia de vista mediante funciones explícitas `showLanding()` /
+`showWorkspace()`.
+
+Por eso, cuando el log superior dice `Abriendo mercado…`, la portada desaparece
+de inmediato y aparece el workspace con gráfico + panel lateral mientras se
+descargan los históricos.
+
+# Forecast Local · Polymarket v0.3
 
 Corrección de navegación del MVP.
 
