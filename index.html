@@ -1,96 +1,307 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
-  <title>Chronos-2 + TimesFM 3.0 · WebGPU POC</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Chronos-2 + TimesFM 3.0 · WebGPU POC v2</title>
+
+  <link rel="stylesheet" href="./styles.css">
+
+  <!-- Visualización -->
   <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
+
+  <!-- El MISMO runtime que ya pasó TimesFM en tu equipo -->
   <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.js"></script>
 </head>
+
 <body>
 <main class="page">
+
   <header class="hero">
     <div>
-      <div class="eyebrow">LOCAL BROWSER INFERENCE · POC</div>
+      <div class="eyebrow">POC v2 · ONNX RUNTIME WEB DIRECTO</div>
       <h1>Chronos-2 + TimesFM 3.0</h1>
-      <p>Prueba mínima para saber si ambos modelos pueden ejecutarse localmente en el navegador usando <b>WebGPU</b>. No hay servidor de inferencia.</p>
+      <p>
+        Ambos modelos se ejecutan directamente con ONNX Runtime Web.
+        <b>Transformers.js fue eliminado</b> de esta versión.
+      </p>
     </div>
-    <div class="hero-badge" id="webgpuBadge">detectando WebGPU…</div>
+
+    <div id="webgpuBadge" class="hero-badge">detectando WebGPU…</div>
   </header>
 
+
   <section class="status-grid">
-    <article class="status-card"><span>WebGPU</span><strong id="gpuStatus">—</strong><small id="gpuInfo">—</small></article>
-    <article class="status-card"><span>Navegador</span><strong id="browserStatus">—</strong><small>Chrome/Edge reciente recomendado</small></article>
-    <article class="status-card"><span>Serie</span><strong id="seriesCount">128 puntos</strong><small>misma entrada para ambos modelos</small></article>
+
+    <article class="status-card">
+      <span>WebGPU</span>
+      <strong id="gpuStatus">—</strong>
+      <small id="gpuInfo">—</small>
+    </article>
+
+    <article class="status-card">
+      <span>Navegador</span>
+      <strong id="browserStatus">—</strong>
+      <small>Chrome / Edge reciente</small>
+    </article>
+
+    <article class="status-card">
+      <span>Serie</span>
+      <strong id="seriesCount">128 puntos</strong>
+      <small>misma entrada para ambos modelos</small>
+    </article>
+
   </section>
 
+
   <section class="panel">
+
     <div class="panel-head">
-      <div><div class="eyebrow">ENTRADA</div><h2>Serie de prueba</h2></div>
+      <div>
+        <div class="eyebrow">ENTRADA</div>
+        <h2>Serie de prueba</h2>
+      </div>
+
       <div class="toolbar">
         <button id="loadDemoBtn" class="secondary">Restaurar demo</button>
-        <label class="file-button secondary">Cargar JSON/CSV<input id="seriesFile" type="file" accept=".json,.csv,.txt" /></label>
+
+        <label class="file-button secondary">
+          Cargar JSON / CSV
+          <input id="seriesFile" type="file" accept=".json,.csv,.txt">
+        </label>
       </div>
     </div>
+
     <textarea id="seriesInput" spellcheck="false"></textarea>
+
     <div class="input-row">
-      <label>Backend<select id="backend"><option value="webgpu" selected>WebGPU · GPU local</option><option value="wasm">WASM · CPU</option></select></label>
-      <label>Repeticiones benchmark<select id="benchRuns"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option></select></label>
-      <label>Chronos dtype<select id="chronosDtype"><option value="fp32" selected>FP32</option><option value="q8">Q8</option></select></label>
+
+      <label>
+        Backend
+        <select id="backend">
+          <option value="webgpu" selected>WebGPU · GPU local</option>
+          <option value="wasm">WASM · CPU</option>
+        </select>
+      </label>
+
+      <label>
+        Repeticiones
+        <select id="benchRuns">
+          <option value="1">1</option>
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+        </select>
+      </label>
+
+      <label>
+        Pasos a mostrar
+        <select id="displayHorizon">
+          <option value="16">16</option>
+          <option value="25" selected>25</option>
+          <option value="64">64</option>
+        </select>
+      </label>
+
     </div>
-    <p class="note">TimesFM usa siempre los últimos <b>128 puntos</b>. Si hay menos, rellena por la izquierda con el primer valor. Chronos usa la serie completa y en este POC pide 16 pasos.</p>
+
+    <p class="note">
+      Chronos recibe un contexto fijo de <b>512</b> puntos: la serie corta se
+      rellena por la izquierda como faltante y se acompaña de su
+      <code>attention_mask</code>. TimesFM recibe los últimos <b>128</b>.
+    </p>
+
   </section>
+
 
   <section class="model-grid">
+
+    <!-- ================================================== -->
+    <!-- CHRONOS -->
+    <!-- ================================================== -->
+
     <article class="model-card">
-      <div class="model-title"><div><div class="eyebrow">PRUEBA A</div><h2>Chronos-2</h2></div><span class="pill" id="chronosState">NO EJECUTADO</span></div>
-      <p><code>kashif/chronos-2-onnx</code> mediante Transformers.js. Esta ruta incluye el preprocesamiento de Chronos.</p>
-      <button id="runChronosBtn" class="primary">Ejecutar Chronos-2</button>
-      <div class="metrics">
-        <div><span>Carga</span><strong id="chronosLoad">—</strong></div><div><span>Inferencia</span><strong id="chronosInfer">—</strong></div>
-        <div><span>Promedio</span><strong id="chronosMean">—</strong></div><div><span>Backend</span><strong id="chronosBackend">—</strong></div>
+
+      <div class="model-title">
+        <div>
+          <div class="eyebrow">PRUEBA A</div>
+          <h2>Chronos-2</h2>
+        </div>
+
+        <span id="chronosState" class="pill">NO EJECUTADO</span>
       </div>
+
+      <p>
+        ONNX Runtime Web <b>directo</b>.
+        Export FP32 tensorial de <code>amazon/chronos-2</code>.
+        Ya no depende de un pipeline de Transformers.js.
+      </p>
+
+      <button id="runChronosBtn" class="primary">
+        Ejecutar Chronos-2
+      </button>
+
+      <div class="metrics">
+        <div>
+          <span>Carga</span>
+          <strong id="chronosLoad">—</strong>
+        </div>
+
+        <div>
+          <span>1ª inferencia</span>
+          <strong id="chronosInfer">—</strong>
+        </div>
+
+        <div>
+          <span>Warm medio</span>
+          <strong id="chronosWarm">—</strong>
+        </div>
+
+        <div>
+          <span>Backend</span>
+          <strong id="chronosBackend">—</strong>
+        </div>
+      </div>
+
       <pre id="chronosLog" class="log">Esperando…</pre>
+
+      <details>
+        <summary>Configuración Chronos</summary>
+
+        <label>
+          ONNX URL
+          <input id="chronosModelUrl" class="wide-input">
+        </label>
+      </details>
+
     </article>
+
+
+    <!-- ================================================== -->
+    <!-- TIMESFM -->
+    <!-- ================================================== -->
 
     <article class="model-card">
-      <div class="model-title"><div><div class="eyebrow">PRUEBA B</div><h2>TimesFM 3.0</h2></div><span class="pill" id="timesfmState">NO EJECUTADO</span></div>
-      <p>ONNX Runtime Web directo. El FP32 de referencia usa grafo ONNX + archivo externo de pesos (~1.3 GB).</p>
-      <button id="runTimesfmBtn" class="primary">Ejecutar TimesFM 3.0</button>
-      <div class="metrics">
-        <div><span>Carga</span><strong id="timesfmLoad">—</strong></div><div><span>Inferencia</span><strong id="timesfmInfer">—</strong></div>
-        <div><span>Promedio</span><strong id="timesfmMean">—</strong></div><div><span>Backend</span><strong id="timesfmBackend">—</strong></div>
+
+      <div class="model-title">
+        <div>
+          <div class="eyebrow">PRUEBA B</div>
+          <h2>TimesFM 3.0</h2>
+        </div>
+
+        <span id="timesfmState" class="pill">NO EJECUTADO</span>
       </div>
+
+      <p>
+        Mantiene exactamente la ruta que ya dio
+        <b>PASS</b> en tu Intel Graphics:
+        ONNX Runtime Web + WebGPU.
+      </p>
+
+      <button id="runTimesfmBtn" class="primary">
+        Ejecutar TimesFM 3.0
+      </button>
+
+      <div class="metrics">
+        <div>
+          <span>Carga</span>
+          <strong id="timesfmLoad">—</strong>
+        </div>
+
+        <div>
+          <span>1ª inferencia</span>
+          <strong id="timesfmInfer">—</strong>
+        </div>
+
+        <div>
+          <span>Warm medio</span>
+          <strong id="timesfmWarm">—</strong>
+        </div>
+
+        <div>
+          <span>Backend</span>
+          <strong id="timesfmBackend">—</strong>
+        </div>
+      </div>
+
       <pre id="timesfmLog" class="log">Esperando…</pre>
+
       <details>
-        <summary>Configuración avanzada TimesFM</summary>
-        <label>ONNX URL<input id="timesfmModelUrl" class="wide-input" /></label>
-        <label>external data URL<input id="timesfmDataUrl" class="wide-input" /></label>
-        <label>path interno external data<input id="timesfmExternalPath" class="wide-input" /></label>
+        <summary>Configuración TimesFM</summary>
+
+        <label>
+          ONNX URL
+          <input id="timesfmModelUrl" class="wide-input">
+        </label>
+
+        <label>
+          external data URL
+          <input id="timesfmDataUrl" class="wide-input">
+        </label>
+
+        <label>
+          path interno external data
+          <input id="timesfmExternalPath" class="wide-input">
+        </label>
+
       </details>
+
     </article>
+
   </section>
 
+
   <section class="panel">
-    <div class="panel-head"><div><div class="eyebrow">RESULTADO</div><h2>Serie + forecasts</h2></div><button id="clearBtn" class="secondary">Limpiar resultados</button></div>
+
+    <div class="panel-head">
+      <div>
+        <div class="eyebrow">RESULTADO</div>
+        <h2>Serie + forecasts</h2>
+      </div>
+
+      <button id="clearBtn" class="secondary">
+        Limpiar resultados
+      </button>
+    </div>
+
     <div id="chart" class="chart"></div>
+
   </section>
+
 
   <section class="panel">
-    <div class="eyebrow">DIAGNÓSTICO</div><h2>Qué queremos demostrar</h2>
-    <ol>
-      <li><b>Chronos-2:</b> carga y hace inferencia en WebGPU.</li>
-      <li><b>TimesFM 3.0:</b> carga y hace inferencia en WebGPU.</li>
-      <li>La página muestra tiempos y dimensiones reales.</li>
-      <li>Si falla, conserva el error completo para identificar descarga, memoria u operador WebGPU.</li>
+
+    <div class="eyebrow">OBJETIVO</div>
+    <h2>Qué debe pasar</h2>
+
+    <ol class="steps">
+      <li>
+        <b>TimesFM:</b> debe seguir dando PASS como en la prueba anterior.
+      </li>
+      <li>
+        <b>Chronos:</b> ya no puede fallar por
+        <code>Unsupported pipeline</code>, porque esa capa fue eliminada.
+      </li>
+      <li>
+        Si Chronos falla ahora, el log ya corresponde al
+        <b>grafo ONNX / WebGPU / memoria / descarga</b>.
+      </li>
     </ol>
-    <div class="warning">Ejecuta <b>un modelo a la vez</b>. TimesFM FP32 es grande. Cierra otras pestañas pesadas antes de probarlo.</div>
+
+    <div class="warning">
+      Ejecuta un modelo a la vez. TimesFM FP32 descarga ~1.3 GB;
+      Chronos FP32 ~456 MB.
+    </div>
+
   </section>
 
-  <footer>POC técnico · ejecución local en navegador · modelos remotos desde Hugging Face</footer>
+
+  <footer>
+    POC técnico · ejecución local · sin backend de inferencia
+  </footer>
+
 </main>
+
 <script type="module" src="./app.js"></script>
 </body>
 </html>
