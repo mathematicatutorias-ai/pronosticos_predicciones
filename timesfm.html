@@ -1,0 +1,10 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TimesFM WebGPU · v5</title>
+<link rel="stylesheet" href="./styles.css?v=5.0.0"><script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.js"></script></head>
+<body><main class="page"><div class="topnav"><a class="button secondary" href="./index.html?v=5.0.0">← Inicio</a></div>
+<header class="hero"><div><div class="eyebrow">TIMESFM · WEBGPU AISLADO · ORT 1.30.0</div><h1>TimesFM 3.0 en Intel GPU</h1><p>La misma ruta que ya dio PASS, ahora físicamente separada de Chronos.</p></div><span id="state" class="pill">NO EJECUTADO</span></header>
+<section class="panel"><div class="version">BUILD v5.0.0 · ORT 1.30.0 · runtime=webgpu</div><div class="status-grid"><div><span>WebGPU</span><strong id="gpu">detectando…</strong></div><div><span>Runtime JS</span><strong>ort.webgpu.min.js</strong></div><div><span>EP</span><strong>webgpu</strong></div></div></section>
+<section class="panel"><textarea id="series"></textarea><div class="input-grid"><label>Repeticiones<select id="runs"><option value="1" selected>1</option><option value="3">3</option></select></label><label>ONNX URL<input id="modelUrl"></label><label>External data URL<input id="dataUrl"></label><label>External path<input id="externalPath"></label></div><div class="actions"><button id="runBtn" class="primary">Ejecutar TimesFM WebGPU</button><button id="copyBtn" class="secondary">Copiar log</button></div></section>
+<section class="panel"><div class="status-grid"><div><span>Carga</span><strong id="loadTime">—</strong></div><div><span>1ª inferencia</span><strong id="firstTime">—</strong></div><div><span>Warm medio</span><strong id="warmTime">—</strong></div></div><pre id="log" class="log">Esperando…</pre></section>
+<section class="panel"><div id="chart" class="chart"></div></section><footer>TimesFM WebGPU · POC v5.0.0</footer></main><script type="module" src="./timesfm.js?v=5.0.0"></script></body></html>

@@ -1,30 +1,19 @@
-# POC v4 — Chronos CPU + TimesFM WebGPU
+# POC v5 — Chronos WASM aislado + TimesFM WebGPU aislado
 
-Decisión de esta versión:
+Esta versión separa físicamente los runtimes:
 
-- Chronos-2 → WASM / CPU local
-- TimesFM-3 → WebGPU / Intel Graphics
+- `chronos.html`: ONNX Runtime Web 1.30 estándar (`ort.min.js`) + WASM estándar.
+- `chronos127.html`: misma prueba con ORT Web 1.27.
+- `timesfm.html`: ORT Web 1.30 WebGPU (`ort.webgpu.min.js`).
 
-El export `TSFM-ai/chronos-2-onnx` documenta ejecución funcional en navegador con ONNX Runtime Web WASM. Por eso esta versión deja de forzar WebGPU para Chronos.
+Chronos fija explícitamente:
+`ort-wasm-simd-threaded.mjs` y `ort-wasm-simd-threaded.wasm`.
 
-## Verificación de versión
+No usa artefactos JSEP/WebGPU.
 
-La página debe mostrar:
+Orden:
+1. `chronos.html`
+2. si falla en Cast_3, `chronos127.html`
+3. TimesFM solo para verificación.
 
-BUILD v4.0.0
-
-y el botón:
-
-Ejecutar Chronos-2 en CPU
-
-Además `index.html` carga `app.js?v=4.0.0` para romper caché.
-
-## Probar
-
-1. Sube el contenido del ZIP a la raíz del repo.
-2. Espera a que termine GitHub Pages.
-3. Abre la página y confirma v4.0.0.
-4. Repeticiones = 1.
-5. Ejecuta Chronos.
-6. Si PASS CPU, prueba 3 repeticiones.
-7. TimesFM queda igual que en el POC que ya dio PASS.
+La portada debe mostrar: `BUILD v5.0.0 · RUNTIMES AISLADOS`.

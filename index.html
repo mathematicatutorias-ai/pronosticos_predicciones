@@ -1,98 +1,13 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <title>Chronos CPU + TimesFM WebGPU · POC v4</title>
-  <link rel="stylesheet" href="./styles.css?v=4.0.0">
-  <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.js"></script>
-</head>
-<body>
-<main class="page">
-<header class="hero">
-  <div>
-    <div class="eyebrow">BUILD v4.0.0 · DEFINITIVO PARA ESTA PRUEBA</div>
-    <h1>Chronos-2 CPU + TimesFM 3.0 GPU</h1>
-    <p>Chronos-2 corre por <b>WASM/CPU local</b>. TimesFM 3.0 queda en <b>WebGPU</b>, donde ya dio PASS.</p>
-  </div>
-  <div class="build-box">
-    <div id="webgpuBadge" class="hero-badge">detectando WebGPU…</div>
-    <code>v4.0.0</code>
-  </div>
-</header>
-
-<section class="status-grid">
-  <article class="status-card"><span>WebGPU</span><strong id="gpuStatus">—</strong><small id="gpuInfo">—</small></article>
-  <article class="status-card"><span>Chronos backend</span><strong>WASM / CPU</strong><small id="wasmInfo">hilos: detectando…</small></article>
-  <article class="status-card"><span>Serie</span><strong id="seriesCount">128 puntos</strong><small>misma entrada</small></article>
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POC v5 · Chronos / TimesFM</title><link rel="stylesheet" href="./styles.css?v=5.0.0">
+</head><body><main class="page">
+<header class="hero"><div><div class="eyebrow">BUILD v5.0.0 · RUNTIMES AISLADOS</div><h1>Chronos + TimesFM local</h1>
+<p>Chronos usa una página con el bundle WASM estándar, sin JSEP/WebGPU. TimesFM usa otra página con el bundle WebGPU que ya dio PASS.</p></div><div class="badge">v5.0.0</div></header>
+<section class="grid">
+<article class="card"><div class="eyebrow">PRUEBA A</div><h2>Chronos-2 · WASM puro</h2><p>ORT Web 1.30.0 estándar. <code>ort.min.js</code> + binarios WASM estándar.</p><div class="actions"><a class="button primary" href="./chronos.html?v=5.0.0">Abrir Chronos WASM</a></div></article>
+<article class="card"><div class="eyebrow">FALLBACK DIAGNÓSTICO</div><h2>Chronos-2 · ORT 1.27</h2><p>Misma prueba WASM aislada con ONNX Runtime Web 1.27.0. Úsala solo si 1.30 vuelve a fallar en Cast_3.</p><div class="actions"><a class="button secondary" href="./chronos127.html?v=5.0.0">Abrir Chronos 1.27</a></div></article>
+<article class="card"><div class="eyebrow">PRUEBA B</div><h2>TimesFM 3.0 · WebGPU</h2><p>Mantiene la implementación que ya dio PASS en Intel Xe-LPG.</p><div class="actions"><a class="button primary" href="./timesfm.html?v=5.0.0">Abrir TimesFM WebGPU</a></div></article>
 </section>
-
-<section class="panel">
-  <div class="panel-head">
-    <div><div class="eyebrow">ENTRADA</div><h2>Serie de prueba</h2></div>
-    <div class="toolbar">
-      <button id="loadDemoBtn" class="secondary">Restaurar demo</button>
-      <label class="file-button secondary">Cargar JSON / CSV<input id="seriesFile" type="file" accept=".json,.csv,.txt"></label>
-    </div>
-  </div>
-  <textarea id="seriesInput" spellcheck="false"></textarea>
-  <div class="input-row">
-    <label>Repeticiones<select id="benchRuns"><option value="1" selected>1</option><option value="3">3</option><option value="5">5</option></select></label>
-    <label>Pasos a mostrar<select id="displayHorizon"><option value="16">16</option><option value="25" selected>25</option><option value="64">64</option></select></label>
-    <label>TimesFM backend<select id="timesfmBackendChoice"><option value="webgpu" selected>WebGPU</option><option value="wasm">WASM / CPU</option></select></label>
-  </div>
-</section>
-
-<section class="model-grid">
-  <article class="model-card">
-    <div class="model-title"><div><div class="eyebrow">PRUEBA A · CPU LOCAL</div><h2>Chronos-2</h2></div><span id="chronosState" class="pill">NO EJECUTADO</span></div>
-    <p>ONNX Runtime Web <b>WASM/CPU</b>. No intenta WebGPU.</p>
-    <button id="runChronosBtn" class="primary">Ejecutar Chronos-2 en CPU</button>
-    <div class="metrics">
-      <div><span>Carga</span><strong id="chronosLoad">—</strong></div>
-      <div><span>1ª inferencia</span><strong id="chronosInfer">—</strong></div>
-      <div><span>Warm medio</span><strong id="chronosWarm">—</strong></div>
-      <div><span>Backend final</span><strong id="chronosBackend">wasm / cpu</strong></div>
-    </div>
-    <pre id="chronosLog" class="log">Esperando…</pre>
-    <details><summary>Configuración Chronos</summary><label>ONNX URL<input id="chronosModelUrl" class="wide-input"></label></details>
-  </article>
-
-  <article class="model-card">
-    <div class="model-title"><div><div class="eyebrow">PRUEBA B · GPU LOCAL</div><h2>TimesFM 3.0</h2></div><span id="timesfmState" class="pill">NO EJECUTADO</span></div>
-    <p>Mismo ONNX Runtime Web + WebGPU que ya dio PASS.</p>
-    <button id="runTimesfmBtn" class="primary">Ejecutar TimesFM 3.0</button>
-    <div class="metrics">
-      <div><span>Carga</span><strong id="timesfmLoad">—</strong></div>
-      <div><span>1ª inferencia</span><strong id="timesfmInfer">—</strong></div>
-      <div><span>Warm medio</span><strong id="timesfmWarm">—</strong></div>
-      <div><span>Backend</span><strong id="timesfmBackend">—</strong></div>
-    </div>
-    <pre id="timesfmLog" class="log">Esperando…</pre>
-    <details>
-      <summary>Configuración TimesFM</summary>
-      <label>ONNX URL<input id="timesfmModelUrl" class="wide-input"></label>
-      <label>external data URL<input id="timesfmDataUrl" class="wide-input"></label>
-      <label>path interno external data<input id="timesfmExternalPath" class="wide-input"></label>
-    </details>
-  </article>
-</section>
-
-<section class="panel">
-  <div class="panel-head"><div><div class="eyebrow">RESULTADO</div><h2>Serie + forecasts</h2></div><button id="clearBtn" class="secondary">Limpiar resultados</button></div>
-  <div id="chart" class="chart"></div>
-</section>
-
-<section class="panel">
-  <div class="eyebrow">VERIFICACIÓN DE VERSIÓN</div>
-  <h2>Comprueba que cargaste v4</h2>
-  <p>Arriba debe decir <b>BUILD v4.0.0</b> y el botón debe decir <b>“Ejecutar Chronos-2 en CPU”</b>.</p>
-</section>
-
-<footer>POC v4.0.0 · Chronos CPU local · TimesFM WebGPU local</footer>
-</main>
-<script type="module" src="./app.js?v=4.0.0"></script>
-</body>
-</html>
+<section class="panel"><div class="eyebrow">ORDEN</div><h2>Prueba así</h2><p class="note">1) Chronos WASM 1.30. 2) Si falla en Cast_3, Chronos WASM 1.27. 3) TimesFM queda separado y no necesitas repetirlo salvo verificación.</p></section>
+<footer>POC v5.0.0 · runtimes aislados</footer></main></body></html>
