@@ -1,183 +1,284 @@
-const BUILD = "v4.0.0";
-const $ = (id) => document.getElementById(id);
+import {searchPolymarket,loadSearchItem,getTokenHistory} from "./api.js?v=0.1.0";
+import {clearAllData,pruneExpired,storageEstimate,countStore} from "./db.js?v=0.1.0";
+import {runChronos,runTimesFM,clearModelCaches} from "./model-bridge.js?v=0.1.0";
 
-const DEFAULT_CHRONOS_ONNX =
-  "https://huggingface.co/TSFM-ai/chronos-2-onnx/resolve/main/model.onnx";
-const DEFAULT_TIMESFM_ONNX =
-  "https://huggingface.co/YangjieOu/timesfm-3.0-onnx/resolve/main/timesfm3-fp32-c128-h64.onnx";
-const DEFAULT_TIMESFM_DATA =
-  "https://huggingface.co/YangjieOu/timesfm-3.0-onnx/resolve/main/timesfm3-fp32-c128-h64.onnx.data";
-const DEFAULT_TIMESFM_EXTERNAL_PATH =
-  "timesfm3-fp32-c128-h64.onnx.data";
+const $=id=>document.getElementById(id);
+const COLORS=["#2f6bff","#67a8ff","#f5b400","#ff7a00","#12b76a","#7a4cff","#e83e8c","#475467"];
+const state={event:null,selected:null,histories:new Map(),forecasts:{},rangeDays:0,searchTimer:null};
 
-let plotState = { chronos: null, timesfm: null };
-
-if (window.ort?.env?.wasm) {
-  window.ort.env.wasm.wasmPaths =
-    "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
-  const threads = crossOriginIsolated
-    ? Math.max(1, Math.min(8, navigator.hardwareConcurrency || 1))
-    : 1;
-  window.ort.env.wasm.numThreads = threads;
-  $("wasmInfo").textContent =
-    `hilos: ${threads} · crossOriginIsolated=${crossOriginIsolated}`;
+function fmtPct(x){
+  if(!Number.isFinite(+x))return "—";
+  if(+x<1 && +x>0)return "<1%";
+  return `${(+x).toFixed(+x>=10?1:2)}%`;
+}
+function fmtUSD(x){
+  const n=Number(x);if(!Number.isFinite(n))return "—";
+  return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",notation:n>=1e6?"compact":"standard",maximumFractionDigits:n>=1e6?2:0}).format(n);
+}
+function fmtDate(x){
+  if(!x)return "—";
+  const d=new Date(x);return Number.isNaN(d.getTime())?"—":d.toLocaleDateString("es-EC",{year:"numeric",month:"short",day:"numeric"});
+}
+function toast(msg,ms=2800){
+  const el=$("toast");el.textContent=msg;el.hidden=false;clearTimeout(el._t);el._t=setTimeout(()=>el.hidden=true,ms);
+}
+function imgFallback(img){
+  img.onerror=()=>{img.onerror=null;img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100%' height='100%' fill='#f2f4f7'/><path d='M25 60 L50 32 L75 60' fill='none' stroke='#98a2b3' stroke-width='7'/></svg>`)};
+}
+function setStatus(text,type="running"){
+  const el=$("forecastStatus");el.hidden=false;el.className=`panel status-panel ${type}`;el.textContent=text;
+}
+function valuesFor(market){
+  const h=state.histories.get(market.yesToken)?.six||[];
+  return h.map(x=>x.p*100);
+}
+function timeFor(market){
+  const h=state.histories.get(market.yesToken)?.six||[];
+  return h.map(x=>new Date(x.t*1000));
+}
+function futureDates(market,n){
+  const xs=timeFor(market);if(!xs.length)return [];
+  let t=xs[xs.length-1].getTime();
+  return Array.from({length:n},()=>new Date(t+=6*3600*1000));
 }
 
-$("chronosModelUrl").value = DEFAULT_CHRONOS_ONNX;
-$("timesfmModelUrl").value = DEFAULT_TIMESFM_ONNX;
-$("timesfmDataUrl").value = DEFAULT_TIMESFM_DATA;
-$("timesfmExternalPath").value = DEFAULT_TIMESFM_EXTERNAL_PATH;
-
-function nowMs(){return performance.now();}
-function fmtMs(v){if(!Number.isFinite(v))return "—";return v>=1000?`${(v/1000).toFixed(2)} s`:`${v.toFixed(1)} ms`;}
-function mean(xs){return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:NaN;}
-function setState(prefix,state,text){const el=$(`${prefix}State`);el.textContent=text;el.classList.remove("ok","fail","running");if(state)el.classList.add(state);}
-function log(prefix,message,append=true){const el=$(`${prefix}Log`);el.textContent=append?el.textContent+(el.textContent?"\n":"")+message:message;el.scrollTop=el.scrollHeight;}
-function errorText(e){return e instanceof Error?`${e.name}: ${e.message}\n${e.stack||""}`:String(e);}
-
-function parseNumbers(text){
-  const s=text.trim(); if(!s) throw new Error("La serie está vacía.");
+async function doSearch(q){
+  const box=$("searchResults");
+  if(q.trim().length<2){box.hidden=true;return}
+  box.hidden=false;box.innerHTML=`<div class="search-empty">Buscando…</div>`;
   try{
-    const p=JSON.parse(s); const vals=Array.isArray(p)?p:p.values;
-    if(Array.isArray(vals)){const out=vals.map(Number).filter(Number.isFinite);if(out.length)return out;}
-  }catch(_){}
-  const out=s.replace(/[;\t]/g,",").split(/[\s,]+/).map(Number).filter(Number.isFinite);
-  if(!out.length) throw new Error("No pude extraer números.");
-  return out;
+    const items=await searchPolymarket(q);
+    if(!items.length){box.innerHTML=`<div class="search-empty">Sin resultados.</div>`;return}
+    box.innerHTML=items.map((x,i)=>`
+      <div class="search-result" data-i="${i}">
+        <img src="${x.image||""}" alt="">
+        <div><b>${escapeHtml(x.title)}</b><small>${escapeHtml(x.sub||"")}</small></div>
+        <span class="result-kind">${x.kind==="event"?"evento":"mercado"}</span>
+      </div>`).join("");
+    [...box.querySelectorAll(".search-result")].forEach((el)=>{
+      imgFallback(el.querySelector("img"));
+      el.onclick=()=>openItem(items[+el.dataset.i]);
+    });
+  }catch(e){box.innerHTML=`<div class="search-empty">Error de API: ${escapeHtml(e.message)}</div>`}
 }
-function currentSeries(){const v=parseNumbers($("seriesInput").value);$("seriesCount").textContent=`${v.length} puntos`;return v;}
-function context128(values){return values.length>=128?values.slice(-128):new Array(128-values.length).fill(values[0]).concat(values);}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
-function makeChronosFeeds(values){
-  const actual=values.slice(-512);
-  const pad=512-actual.length;
-  const context=new Float32Array(512); context.fill(NaN);
-  const mask=new Float32Array(512); mask.fill(0);
-  for(let i=0;i<actual.length;i++){context[pad+i]=Number(actual[i]);mask[pad+i]=1.0;}
-  const futureCovariates=new Float32Array(64); futureCovariates.fill(NaN);
-  return {
-    context:new ort.Tensor("float32",context,[1,512]),
-    group_ids:new ort.Tensor("int64",new BigInt64Array([0n]),[1]),
-    attention_mask:new ort.Tensor("float32",mask,[1,512]),
-    future_covariates:new ort.Tensor("float32",futureCovariates,[1,64]),
-    num_output_patches:new ort.Tensor("int64",new BigInt64Array([4n]),[])
-  };
-}
-
-function decodeChronosOutput(tensor){
-  if(!tensor) throw new Error("Chronos no devolvió quantile_preds.");
-  const dims=tensor.dims.map(Number), data=Array.from(tensor.data,Number);
-  if(dims.length!==3||dims[1]<21) throw new Error(`Forma Chronos inesperada: [${dims.join(", ")}]`);
-  const H=dims[2], q10=[], q50=[], q90=[];
-  const at=(q,h)=>data[q*H+h];
-  for(let h=0;h<H;h++){q10.push(at(2,h));q50.push(at(10,h));q90.push(at(18,h));}
-  return {q10,q50,q90,dims};
-}
-
-function decodeTimesfmOutput(tensor){
-  if(!tensor) throw new Error("TimesFM no devolvió forecast_quantiles.");
-  const dims=tensor.dims.map(Number),data=Array.from(tensor.data,Number);
-  if(dims.length!==4||dims[3]<9)throw new Error(`Forma TimesFM inesperada: [${dims.join(", ")}]`);
-  const H=dims[2], nq=dims[3], q10=[], q50=[], q90=[];
-  for(let h=0;h<H;h++){const o=h*nq;q10.push(data[o]);q50.push(data[o+4]);q90.push(data[o+8]);}
-  return {q10,q50,q90,dims};
-}
-
-async function detectWebGPU(){
-  if(!navigator.gpu){$("gpuStatus").textContent="NO DISPONIBLE";$("gpuInfo").textContent="navigator.gpu no existe";$("webgpuBadge").textContent="WebGPU no disponible";$("webgpuBadge").classList.add("fail");return;}
+async function openItem(item){
+  $("searchResults").hidden=true;
+  setStatus("Abriendo evento y descargando históricos…","running");
   try{
-    const adapter=await navigator.gpu.requestAdapter({powerPreference:"high-performance"});
-    if(!adapter)throw new Error("requestAdapter() devolvió null.");
-    let label="GPU detectada";
-    try{const info=adapter.info;const parts=[info?.vendor,info?.architecture,info?.device,info?.description].filter(Boolean);if(parts.length)label=parts.join(" · ");}catch(_){}
-    $("gpuStatus").textContent="DISPONIBLE";$("gpuInfo").textContent=label;$("webgpuBadge").textContent="WebGPU listo";$("webgpuBadge").classList.add("ok");
-  }catch(e){$("gpuStatus").textContent="ERROR";$("gpuInfo").textContent=errorText(e).split("\n")[0];$("webgpuBadge").textContent="WebGPU con error";$("webgpuBadge").classList.add("fail");}
-}
+    const ev=await loadSearchItem(item);
+    state.event=ev;
+    const markets=[...ev.markets].sort((a,b)=>b.yesPrice-a.yesPrice);
+    state.event.markets=markets;
+    state.selected=markets[0]||null;
+    state.forecasts={};
+    $("landing").hidden=true;$("workspace").hidden=false;
+    renderEvent();
 
-function updatePlot(){
-  const values=currentSeries(), Hshow=Number($("displayHorizon").value);
-  const xObs=Array.from({length:values.length},(_,i)=>i-values.length+1);
-  const traces=[{x:xObs,y:values,type:"scatter",mode:"lines",name:"Observado",line:{width:3}}];
-  function add(label,result,dash){
-    if(!result?.q50?.length)return;
-    const n=Math.min(Hshow,result.q50.length),x=Array.from({length:n},(_,i)=>i+1);
-    traces.push({x,y:result.q90.slice(0,n),type:"scatter",mode:"lines",line:{width:0},hoverinfo:"skip",showlegend:false});
-    traces.push({x,y:result.q10.slice(0,n),type:"scatter",mode:"lines",line:{width:0},fill:"tonexty",opacity:.1,hoverinfo:"skip",showlegend:false});
-    traces.push({x,y:result.q50.slice(0,n),type:"scatter",mode:"lines",name:label,line:{width:2.5,dash}});
+    const initial=markets.slice(0,Math.min(4,markets.length));
+    for(const m of initial){
+      try{state.histories.set(m.yesToken,await getTokenHistory(m.yesToken))}catch(e){console.warn("history",m.title,e)}
+      renderChart();
+    }
+    if(state.selected && !state.histories.has(state.selected.yesToken)){
+      state.histories.set(state.selected.yesToken,await getTokenHistory(state.selected.yesToken));
+    }
+    renderChart();renderSelected();
+    $("forecastStatus").hidden=true;
+    await refreshStorage();
+  }catch(e){
+    setStatus(`No pude abrir el mercado: ${e.message}`,"error");
+    toast(e.message,5000);
   }
-  add("Chronos-2 · CPU",plotState.chronos,"dash");
-  add("TimesFM-3 · GPU",plotState.timesfm,"dot");
-  Plotly.react("chart",traces,{template:"plotly_white",height:500,margin:{l:55,r:20,t:25,b:45},hovermode:"x unified",xaxis:{title:"Pasos relativos · forecast > 0",zeroline:true},yaxis:{title:"Valor"},legend:{orientation:"h",y:1.08}},{responsive:true,displaylogo:false});
 }
 
-async function runChronos(){
-  const btn=$("runChronosBtn");btn.disabled=true;setState("chronos","running","EJECUTANDO CPU");log("chronos","",false);
-  let session=null;
+function renderEvent(){
+  const e=state.event;if(!e)return;
+  $("eventTitle").textContent=e.title;
+  $("eventMeta").textContent=[e.tags?.[0]?.label||e.tags?.[0]?.name||"",e.active?"mercado activo":e.closed?"cerrado":""].filter(Boolean).join(" · ");
+  $("eventImage").src=e.image||"";imgFallback($("eventImage"));
+  $("volumeTotal").textContent=`Volumen total ${fmtUSD(e.volume)}`;
+  $("lastUpdated").textContent=`Última actualización ${new Date().toLocaleString("es-EC",{dateStyle:"medium",timeStyle:"short"})}`;
+
+  $("outcomeLegend").innerHTML=e.markets.slice(0,6).map((m,i)=>`
+    <span class="legend-item"><i style="background:${COLORS[i%COLORS.length]}"></i>${escapeHtml(m.title)} <b>${fmtPct(m.yesPrice)}</b></span>`).join("");
+
+  $("marketRows").innerHTML=e.markets.map((m,i)=>`
+    <div class="market-row" data-id="${escapeHtml(m.id)}">
+      <div class="market-main">
+        <img src="${m.image||e.image||""}" alt="">
+        <i class="market-dot" style="background:${COLORS[i%COLORS.length]}"></i>
+        <div class="market-title">${escapeHtml(m.title)}</div>
+      </div>
+      <div class="market-price">${fmtPct(m.yesPrice)}</div>
+      <div class="market-volume">${fmtUSD(m.volume)}</div>
+      <button class="analyze-btn ${state.selected?.id===m.id?"active":""}">Analizar</button>
+    </div>`).join("");
+  [...$("marketRows").querySelectorAll(".market-row")].forEach((row,i)=>{
+    imgFallback(row.querySelector("img"));
+    row.querySelector("button").onclick=()=>selectMarket(e.markets[i]);
+  });
+  renderSelected();
+}
+
+async function selectMarket(m){
+  state.selected=m;state.forecasts={};
+  renderEvent();renderChart();
+  if(!state.histories.has(m.yesToken)){
+    setStatus(`Descargando histórico de ${m.title}…`,"running");
+    try{state.histories.set(m.yesToken,await getTokenHistory(m.yesToken));$("forecastStatus").hidden=true}
+    catch(e){setStatus(`Histórico no disponible: ${e.message}`,"error")}
+  }
+  renderChart();renderSelected();await refreshStorage();
+}
+
+function renderSelected(){
+  const m=state.selected;if(!m)return;
+  $("selectedImage").src=m.image||state.event.image||"";imgFallback($("selectedImage"));
+  $("selectedName").textContent=m.title;$("selectedPrice").textContent=fmtPct(m.yesPrice);
+  $("selectedSub").textContent=state.event.title;
+  $("mCurrent").textContent=fmtPct(m.yesPrice);$("mVolume").textContent=fmtUSD(m.volume);
+  $("mStatus").textContent=m.active?"Activo":m.closed?"Cerrado":"—";$("mEnd").textContent=fmtDate(m.endDate);
+}
+
+function renderChart(){
+  if(!state.event)return;
+  const traces=[];
+  const all=state.event.markets;
+  const selected=state.selected;
+  const maxObserved=[];
+  all.slice(0,8).forEach((m,i)=>{
+    const h=state.histories.get(m.yesToken)?.six||[];
+    if(!h.length)return;
+    let pts=h;
+    if(state.rangeDays){
+      const cutoff=Date.now()-state.rangeDays*86400*1000;
+      pts=h.filter(x=>x.t*1000>=cutoff);
+    }
+    const x=pts.map(p=>new Date(p.t*1000)),y=pts.map(p=>p.p*100);
+    if(x.length)maxObserved.push(x[x.length-1]);
+    traces.push({
+      x,y,type:"scatter",mode:"lines",name:m.title,
+      line:{width:selected?.id===m.id?2.6:1.7,color:COLORS[i%COLORS.length]},
+      opacity:selected?.id===m.id?1:.68,
+      hovertemplate:`${escapeHtml(m.title)}: %{y:.2f}%<extra></extra>`
+    });
+  });
+
+  if(selected){
+    const idx=Math.max(0,all.findIndex(x=>x.id===selected.id));
+    const color=COLORS[idx%COLORS.length];
+    for(const [key,label,dash] of [["chronos","Chronos-2","dash"],["timesfm","TimesFM-3","dot"]]){
+      const f=state.forecasts[key];if(!f)continue;
+      const n=f.q50.length,x=futureDates(selected,n);
+      traces.push({x,y:f.q90,type:"scatter",mode:"lines",line:{width:0,color},hoverinfo:"skip",showlegend:false});
+      traces.push({x,y:f.q10,type:"scatter",mode:"lines",line:{width:0,color},fill:"tonexty",fillcolor:hexAlpha(color,.10),hoverinfo:"skip",showlegend:false});
+      traces.push({x,y:f.q50,type:"scatter",mode:"lines",name:label,line:{width:2.3,dash,color},hovertemplate:`${label}: %{y:.2f}%<extra></extra>`});
+    }
+  }
+
+  const shapes=[];
+  if(selected){
+    const xs=timeFor(selected);if(xs.length && (state.forecasts.chronos||state.forecasts.timesfm)){
+      shapes.push({type:"line",x0:xs.at(-1),x1:xs.at(-1),y0:0,y1:1,yref:"paper",line:{color:"#98a2b3",dash:"dot",width:1}});
+    }
+  }
+  Plotly.react("chart",traces,{
+    template:"plotly_white",margin:{l:48,r:20,t:10,b:38},hovermode:"x unified",
+    xaxis:{showgrid:true,gridcolor:"#f0f2f5",zeroline:false},
+    yaxis:{range:[0,100],ticksuffix:"%",showgrid:true,gridcolor:"#eef1f4",zeroline:false},
+    showlegend:false,shapes
+  },{responsive:true,displaylogo:false,modeBarButtonsToRemove:["lasso2d","select2d"]});
+}
+
+function hexAlpha(hex,a){
+  const h=hex.replace("#","");const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+async function ensureSelectedHistory(){
+  const m=state.selected;if(!m)throw new Error("Selecciona un mercado.");
+  if(!state.histories.has(m.yesToken))state.histories.set(m.yesToken,await getTokenHistory(m.yesToken));
+  const values=valuesFor(m);if(values.length<20)throw new Error("La serie histórica es demasiado corta.");
+  return values;
+}
+function horizonFor(values){return Math.max(1,Math.min(64,Math.round(values.length*.20)))}
+
+async function runOne(model){
   try{
-    const values=currentSeries(),benchRuns=Number($("benchRuns").value),modelUrl=$("chronosModelUrl").value.trim();
-    log("chronos",`BUILD: ${BUILD}`);
-    log("chronos","Backend: wasm / cpu");
-    log("chronos",`WASM threads: ${ort.env.wasm.numThreads}`);
-    log("chronos",`Contexto recibido: ${values.length}`);
-    log("chronos",`ONNX: ${modelUrl}`);
-    log("chronos","NO se intentará WebGPU para Chronos.");
-    log("chronos","Descargando/cargando ~456 MB…");
-    const t0=nowMs();
-    session=await ort.InferenceSession.create(modelUrl,{executionProviders:["wasm"],graphOptimizationLevel:"all"});
-    const loadMs=nowMs()-t0;$("chronosLoad").textContent=fmtMs(loadMs);
-    log("chronos",`✓ Sesión CPU creada en ${fmtMs(loadMs)}`);
-    log("chronos",`Inputs: ${session.inputNames.join(", ")}`);
-    log("chronos",`Outputs: ${session.outputNames.join(", ")}`);
-    const feeds=makeChronosFeeds(values),times=[];let decoded=null;
-    for(let i=0;i<benchRuns;i++){const ti=nowMs();const outputs=await session.run(feeds);const elapsed=nowMs()-ti;times.push(elapsed);decoded=decodeChronosOutput(outputs.quantile_preds??outputs[session.outputNames[0]]);log("chronos",`Inferencia ${i+1}/${benchRuns}: ${fmtMs(elapsed)}`);}
-    $("chronosInfer").textContent=fmtMs(times[0]);$("chronosWarm").textContent=fmtMs(mean(times.length>1?times.slice(1):times));plotState.chronos=decoded;updatePlot();
-    log("chronos",`Forma salida: [${decoded.dims.join(", ")}]`);
-    log("chronos",`q50 primeros 5: ${decoded.q50.slice(0,5).map(v=>Number(v).toFixed(5)).join(", ")}`);
-    setState("chronos","ok","PASS CPU");
-  }catch(e){setState("chronos","fail","FAIL CPU");log("chronos","\nERROR\n"+errorText(e));console.error(e);}
-  finally{if(session){try{await session.release();}catch(_){}}btn.disabled=false;}
+    const values=await ensureSelectedHistory();
+    const persist=$("persistModels").checked;
+    setStatus(`Ejecutando ${model==="chronos"?"Chronos-2":"TimesFM-3"} localmente…`,"running");
+    const r=model==="chronos"?await runChronos(values,{persist}):await runTimesFM(values,{persist});
+    const h=horizonFor(values);
+    state.forecasts[model]={q10:r.q10.slice(0,h),q50:r.q50.slice(0,h),q90:r.q90.slice(0,h)};
+    renderChart();
+    setStatus(`${model==="chronos"?"Chronos-2":"TimesFM-3"} listo · ${r.backend} · carga ${(r.loadMs/1000).toFixed(1)} s · inferencia ${r.inferMs.toFixed(0)} ms`,"ok");
+    await refreshStorage();
+  }catch(e){setStatus(e.message,"error")}
 }
 
-async function runTimesfm(){
-  const btn=$("runTimesfmBtn");btn.disabled=true;setState("timesfm","running","EJECUTANDO");log("timesfm","",false);let session=null;
+function metrics(actual,pred){
+  const n=Math.min(actual.length,pred.length);if(!n)return {mae:NaN,rmse:NaN};
+  let ae=0,se=0;for(let i=0;i<n;i++){const d=pred[i]-actual[i];ae+=Math.abs(d);se+=d*d}
+  return {mae:ae/n,rmse:Math.sqrt(se/n),n};
+}
+async function compare(){
   try{
-    const values=currentSeries(),context=context128(values),backend=$("timesfmBackendChoice").value,benchRuns=Number($("benchRuns").value);
-    const modelUrl=$("timesfmModelUrl").value.trim(),dataUrl=$("timesfmDataUrl").value.trim(),externalPath=$("timesfmExternalPath").value.trim();
-    $("timesfmBackend").textContent=backend;
-    log("timesfm",`BUILD: ${BUILD}`);log("timesfm",`Backend: ${backend}`);log("timesfm",`Contexto: ${context.length}`);log("timesfm",`ONNX: ${modelUrl}`);log("timesfm",`External data: ${dataUrl}`);log("timesfm","FP32 ~1.3 GB");
-    const t0=nowMs();
-    session=await ort.InferenceSession.create(modelUrl,{executionProviders:[backend],graphOptimizationLevel:"all",externalData:[{path:externalPath,data:dataUrl}]});
-    const loadMs=nowMs()-t0;$("timesfmLoad").textContent=fmtMs(loadMs);
-    log("timesfm",`Sesión creada en ${fmtMs(loadMs)}`);
-    log("timesfm",`Inputs: ${session.inputNames.join(", ")}`);log("timesfm",`Outputs: ${session.outputNames.join(", ")}`);
-    const target=new ort.Tensor("float32",Float32Array.from(context),[1,1,128]),times=[];let decoded=null;
-    for(let i=0;i<benchRuns;i++){const ti=nowMs();const outputs=await session.run({target});const elapsed=nowMs()-ti;times.push(elapsed);decoded=decodeTimesfmOutput(outputs.forecast_quantiles??outputs[session.outputNames[0]]);log("timesfm",`Inferencia ${i+1}/${benchRuns}: ${fmtMs(elapsed)}`);}
-    $("timesfmInfer").textContent=fmtMs(times[0]);$("timesfmWarm").textContent=fmtMs(mean(times.length>1?times.slice(1):times));plotState.timesfm=decoded;updatePlot();
-    log("timesfm",`Forma salida: [${decoded.dims.join(", ")}]`);
-    log("timesfm",`q50 primeros 5: ${decoded.q50.slice(0,5).map(v=>Number(v).toFixed(5)).join(", ")}`);
-    setState("timesfm","ok","PASS");
-  }catch(e){setState("timesfm","fail","FAIL");log("timesfm","\nERROR\n"+errorText(e));console.error(e);}
-  finally{if(session){try{await session.release();}catch(_){}}btn.disabled=false;}
+    const values=await ensureSelectedHistory();
+    const n=values.length,testN=Math.max(1,Math.round(n*.15)),cut=n-testN,context=values.slice(0,cut),actual=values.slice(cut);
+    const persist=$("persistModels").checked;
+    $("comparePanel").hidden=false;$("compareTable").innerHTML="<div class='muted small'>Ejecutando Chronos…</div>";
+    const c=await runChronos(context,{persist});
+    $("compareTable").innerHTML="<div class='muted small'>Ejecutando TimesFM…</div>";
+    const t=await runTimesFM(context,{persist});
+    const cm=metrics(actual,c.q50.slice(0,testN)),tm=metrics(actual,t.q50.slice(0,testN));
+    $("compareTable").innerHTML=`
+      <table class="compare-table">
+        <thead><tr><th>Modelo</th><th>MAE</th><th>RMSE</th></tr></thead>
+        <tbody>
+          <tr><td>Chronos-2</td><td>${cm.mae.toFixed(3)}</td><td>${cm.rmse.toFixed(3)}</td></tr>
+          <tr><td>TimesFM-3</td><td>${tm.mae.toFixed(3)}</td><td>${tm.rmse.toFixed(3)}</td></tr>
+        </tbody>
+      </table>`;
+    setStatus(`Comparación terminada sobre ${testN} puntos TEST.`,"ok");
+    await refreshStorage();
+  }catch(e){$("comparePanel").hidden=false;$("compareTable").innerHTML=`<div class="muted small">${escapeHtml(e.message)}</div>`;setStatus(e.message,"error")}
 }
 
-async function loadDemo(){
-  const r=await fetch("./data/demo_series.json?v=4.0.0");
-  if(!r.ok)throw new Error(`No pude abrir demo_series.json (${r.status}).`);
-  const data=await r.json(),values=data.values.map(Number);
-  $("seriesInput").value=JSON.stringify(values);$("seriesCount").textContent=`${values.length} puntos`;plotState={chronos:null,timesfm:null};updatePlot();
-}
-async function loadFile(file){
-  const values=parseNumbers(await file.text());
-  $("seriesInput").value=JSON.stringify(values);$("seriesCount").textContent=`${values.length} puntos`;plotState={chronos:null,timesfm:null};updatePlot();
+async function refreshStorage(){
+  const est=await storageEstimate();
+  if(est){$("storageUsage").textContent=`${(est.usage/1024/1024).toFixed(1)} MB / ${(est.quota/1024/1024/1024).toFixed(1)} GB`}
+  const h=await countStore("history");$("dataCacheStatus").textContent=`${h} series`;
+  try{const c=await caches.open("forecast-local-models-v1");const keys=await c.keys();$("modelCacheStatus").textContent=`${keys.length} archivos`}catch{}
 }
 
-$("runChronosBtn").addEventListener("click",runChronos);
-$("runTimesfmBtn").addEventListener("click",runTimesfm);
-$("loadDemoBtn").addEventListener("click",loadDemo);
-$("clearBtn").addEventListener("click",()=>{plotState={chronos:null,timesfm:null};updatePlot();});
-$("seriesFile").addEventListener("change",async e=>{const f=e.target.files?.[0];if(f){try{await loadFile(f);}catch(err){alert(errorText(err));}}});
-$("seriesInput").addEventListener("change",()=>{try{updatePlot();}catch(_){}});
-$("displayHorizon").addEventListener("change",updatePlot);
+$("searchInput").addEventListener("input",e=>{
+  const q=e.target.value;$("searchClear").hidden=!q;clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>doSearch(q),350);
+});
+$("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter"){clearTimeout(state.searchTimer);doSearch(e.target.value)}});
+$("searchClear").onclick=()=>{$("searchInput").value="";$("searchResults").hidden=true;$("searchClear").hidden=true};
+document.addEventListener("click",e=>{if(!e.target.closest(".search-wrap"))$("searchResults").hidden=true});
 
-await detectWebGPU();
-try{await loadDemo();}catch(e){console.error(e);$("seriesInput").value="55,55.2,55.4,55.1";}
+[...document.querySelectorAll(".tab")].forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");$(`tab-${b.dataset.tab}`).classList.add("active");
+  if(b.dataset.tab==="local")refreshStorage();
+});
+[...document.querySelectorAll(".range-pills button")].forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".range-pills button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+  state.rangeDays=+b.dataset.range;renderChart();
+});
+
+$("runChronos").onclick=()=>runOne("chronos");
+$("runTimesfm").onclick=()=>runOne("timesfm");
+$("compareModels").onclick=compare;
+
+$("clearData").onclick=async()=>{await clearAllData();state.histories.clear();toast("Datos locales borrados.");renderChart();refreshStorage()};
+$("clearModels").onclick=async()=>{await clearModelCaches();toast("Caché de modelos borrada.");refreshStorage()};
+$("clearAll").onclick=async()=>{await clearAllData();await clearModelCaches();state.histories.clear();state.forecasts={};toast("Almacenamiento local borrado.");renderChart();refreshStorage()};
+
+await pruneExpired();
+await refreshStorage();
