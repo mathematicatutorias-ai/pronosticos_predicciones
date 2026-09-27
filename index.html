@@ -5,26 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Forecast Local</title>
-  <link rel="stylesheet" href="./styles.css?v=0.3.0">
+  <link rel="stylesheet" href="./styles.css?v=0.4.0">
   <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-locale-es-latest.js"></script>
 </head>
 <body>
 <div class="app">
-
   <header class="topbar">
-    <a class="brand" href="./">
-      <span class="brandmark">⌁</span>
-      <span>Forecast Local</span>
-    </a>
-
+    <a class="brand" href="./"><span class="brandmark">⌁</span><span>Forecast Local</span></a>
     <div class="search-wrap">
       <span class="search-icon">⌕</span>
-      <input id="searchInput" autocomplete="off" placeholder="Buscar mercado o evento...">
+      <input id="searchInput" autocomplete="off" placeholder="Buscar eventos o mercados…">
       <button id="searchClear" class="icon-btn" hidden>×</button>
       <div id="searchResults" class="search-results" hidden></div>
     </div>
-
-    <div class="local-pill"><span></span> Local <small style="opacity:.55;margin-left:5px">v0.3</small></div>
+    <div class="local-pill"><span></span> Local <small>v0.4</small></div>
   </header>
 
   <div id="openStatus" class="open-status" hidden></div>
@@ -33,59 +28,57 @@
     <div class="landing-inner">
       <div class="landing-kicker">DATOS + MODELOS · EN TU DISPOSITIVO</div>
       <h1>Consulta cualquier mercado.<br>Analízalo localmente.</h1>
-      <p>Busca eventos y mercados públicos. El navegador descarga los datos, guarda el histórico localmente y ejecuta los modelos en tu CPU/GPU.</p>
+      <p>El navegador consulta los datos públicos, conserva históricos en IndexedDB y ejecuta Chronos-2 y TimesFM-3 en tu propio dispositivo.</p>
       <button id="focusTopSearch" class="landing-cta">Buscar un mercado ↑</button>
-      <div class="landing-foot">
-        <span>Sin cuenta</span><i></i><span>Sin servidor de inferencia</span><i></i><span>Datos locales borrables</span>
-      </div>
+      <div class="landing-foot"><span>Sin cuenta</span><i></i><span>Sin servidor de inferencia</span><i></i><span>Datos locales borrables</span></div>
     </div>
   </main>
 
   <main id="workspace" class="workspace" hidden>
     <section class="main-col">
-
       <div class="event-head">
         <img id="eventImage" class="event-image" alt="">
         <div class="event-copy">
-          <div id="eventMeta" class="muted small"></div>
           <h1 id="eventTitle">—</h1>
-          <div id="outcomeLegend" class="legend-outcomes"></div>
+          <div id="eventMeta" class="muted small"></div>
         </div>
-        <div class="device-pill">▣ Todo ocurre en este dispositivo</div>
+        <div class="horizon-control">
+          <div class="horizon-buttons">
+            <button data-horizon="3">3 días</button>
+            <button data-horizon="7" class="active">7 días</button>
+            <button data-horizon="14">14 días</button>
+          </div>
+          <div class="horizon-copy"><span>Horizonte de pronóstico</span><b id="horizonText">7 días (28 pasos de 6 horas)</b></div>
+        </div>
       </div>
 
       <section class="chart-card">
-        <div class="chart-toolbar">
-          <div class="model-legend">
-            <span><i class="line solid"></i> Observado</span>
-            <span><i class="line dash"></i> Chronos-2</span>
-            <span><i class="line dot"></i> TimesFM-3</span>
+        <div class="chart-title-row">
+          <div>
+            <h2>Probabilidad implícita en el mercado (6 horas)</h2>
+            <div class="model-legend">
+              <span><i class="line solid"></i> Observado</span>
+              <span><i class="line dash"></i> Chronos-2</span>
+              <span><i class="line dot"></i> TimesFM-3</span>
+            </div>
           </div>
-          <div class="range-pills">
-            <button data-range="7">1S</button>
-            <button data-range="30">1M</button>
-            <button data-range="90">3M</button>
-            <button data-range="0" class="active">TODO</button>
-          </div>
+          <div id="chartSeriesLegend" class="series-legend"></div>
         </div>
         <div id="chartStatus" class="chart-status" hidden></div>
         <div id="chart" class="chart"></div>
-        <div class="chart-foot">
-          <span id="volumeTotal">Volumen —</span>
-          <span id="lastUpdated">Actualizado —</span>
-        </div>
+        <div class="chart-foot"><span id="volumeTotal">Volumen —</span><span id="lastUpdated">Actualizado —</span></div>
       </section>
 
       <section class="table-card">
+        <div class="table-title-row">
+          <h2 id="marketCount">Mercados del evento</h2>
+          <div class="market-filter"><span>⌕</span><input id="marketFilter" placeholder="Buscar outcome o mercado…"></div>
+        </div>
         <div class="table-head">
-          <span>Outcome / mercado</span>
-          <span>Probabilidad</span>
-          <span>Volumen</span>
-          <span></span>
+          <span>Outcome / mercado</span><span>Probabilidad</span><span>Estado</span><span>Modelos</span><span>Actualización</span><span></span>
         </div>
         <div id="marketRows"></div>
       </section>
-
     </section>
 
     <aside class="rail">
@@ -93,10 +86,11 @@
         <img id="selectedImage" class="selected-image" alt="">
         <div class="selected-copy">
           <div id="selectedName" class="selected-name">—</div>
-          <div id="selectedPrice" class="selected-price">—</div>
           <div id="selectedSub" class="muted small"></div>
+          <div id="selectedPrice" class="selected-price">—</div>
         </div>
       </div>
+      <a id="sourceLink" class="source-link" href="#" target="_blank" rel="noopener">Abrir mercado fuente ↗</a>
 
       <div class="tabs">
         <button class="tab active" data-tab="market">Mercado</button>
@@ -111,71 +105,64 @@
           <div class="kv"><span>Volumen</span><b id="mVolume">—</b></div>
           <div class="kv"><span>Estado</span><b id="mStatus">—</b></div>
           <div class="kv"><span>Fin</span><b id="mEnd">—</b></div>
+          <div class="kv"><span>Resolución local</span><b>6 horas</b></div>
         </div>
-        <div class="rail-note">Los porcentajes reflejan precios/probabilidades implícitas del mercado; no son una predicción independiente del resultado del evento.</div>
+        <div class="rail-note">Los porcentajes son precios/probabilidades implícitas del mercado. Los modelos pronostican esa trayectoria de precio, no la resolución del evento.</div>
       </section>
 
       <section id="tab-forecast" class="tab-panel">
-        <div class="panel">
-          <h3>Modelos de pronóstico</h3>
-          <p class="muted small">Pronostican la trayectoria futura del precio del mercado seleccionado.</p>
-          <button id="runChronos" class="model-btn">
-            <span class="model-icon">⌁</span><span><b>Chronos-2</b><small>CPU · WASM</small></span><i>›</i>
-          </button>
-          <button id="runTimesfm" class="model-btn">
-            <span class="model-icon purple">▥</span><span><b>TimesFM-3</b><small>GPU · WebGPU</small></span><i>›</i>
-          </button>
-          <button id="compareModels" class="compare-btn">⚖ Comparar modelos</button>
+        <div id="forecastEmpty" class="panel empty-panel">
+          <h3>Pronóstico local</h3>
+          <p>Este outcome todavía no ha sido analizado.</p>
+          <button id="analyzeSelected" class="primary-btn">Analizar ahora</button>
         </div>
 
+        <div id="forecastResults" hidden>
+          <div class="panel">
+            <div class="section-label" id="forecastHorizonLabel">HORIZONTE: 7 DÍAS</div>
+            <div id="modelForecastRows"></div>
+            <button id="compareModels" class="compare-btn">Comparar modelos</button>
+          </div>
+          <div id="comparePanel" class="panel" hidden>
+            <div class="section-label">DESEMPEÑO EN PRUEBA</div>
+            <div id="compareTable"></div>
+          </div>
+          <div class="panel">
+            <div class="section-label">DATOS DEL ANÁLISIS</div>
+            <div class="kv"><span>Esquema</span><b id="splitMode">—</b></div>
+            <div class="kv"><span>Histórico</span><b id="historyInfo">—</b></div>
+            <div class="kv"><span>Último análisis</span><b id="analysisUpdated">—</b></div>
+          </div>
+        </div>
         <div id="forecastStatus" class="panel status-panel" hidden></div>
-
-        <div id="comparePanel" class="panel" hidden>
-          <h3>Evaluación temporal</h3>
-          <div class="split-row"><span>70% contexto</span><span>15% validación</span><span>15% prueba</span></div>
-          <div id="compareTable"></div>
-          <p class="muted micro">El error se calcula contra el tramo TEST observado. Menor MAE/RMSE indica mejor ajuste fuera de muestra para esta serie.</p>
+        <div class="panel visible-panel">
+          <div class="section-label">SERIES VISIBLES EN EL GRÁFICO</div>
+          <div id="visibleSeries"></div>
+          <button id="clearVisible" class="ghost-btn">Ocultar series analizadas</button>
         </div>
       </section>
 
       <section id="tab-local" class="tab-panel">
         <div class="panel">
           <h3>Almacenamiento local</h3>
-          <div class="storage-row">
-            <span>Datos de mercado</span>
-            <b id="dataCacheStatus">IndexedDB</b>
-          </div>
-          <div class="storage-row">
-            <span>Modelos ONNX</span>
-            <b id="modelCacheStatus">Cache Storage</b>
-          </div>
-          <div class="storage-row">
-            <span>Uso del sitio</span>
-            <b id="storageUsage">—</b>
-          </div>
-
-          <label class="toggle-row">
-            <span>Conservar modelos descargados</span>
-            <input id="persistModels" type="checkbox" checked>
-          </label>
-
-          <button id="clearData" class="ghost-danger">Borrar datos</button>
+          <div class="storage-row"><span>Históricos</span><b id="dataCacheStatus">IndexedDB</b></div>
+          <div class="storage-row"><span>Análisis guardados</span><b id="analysisCacheStatus">—</b></div>
+          <div class="storage-row"><span>Modelos ONNX</span><b id="modelCacheStatus">Cache Storage</b></div>
+          <div class="storage-row"><span>Uso del sitio</span><b id="storageUsage">—</b></div>
+          <label class="toggle-row"><span>Conservar modelos descargados</span><input id="persistModels" type="checkbox" checked></label>
+          <button id="clearData" class="ghost-danger">Borrar datos y análisis</button>
           <button id="clearModels" class="ghost-danger">Borrar modelos</button>
           <button id="clearAll" class="danger">Borrar todo</button>
         </div>
-        <p class="rail-note">Los históricos guardados se eliminan automáticamente si no se usan durante 7 días. Los modelos se conservan hasta que los borres o el navegador libere espacio.</p>
+        <p class="rail-note">Los históricos tienen una vigencia local de 7 días. Los análisis son pequeños y se conservan hasta que los borres; si llegan nuevos datos quedan marcados para actualizar.</p>
       </section>
-
     </aside>
   </main>
 
   <div id="toast" class="toast" hidden></div>
-
-  <!-- Runtimes físicamente aislados, como en el POC exitoso -->
-  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.3.0" hidden></iframe>
-  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.3.0" hidden></iframe>
+  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.4.0" hidden></iframe>
+  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.4.0" hidden></iframe>
 </div>
-
-<script type="module" src="./app.js?v=0.3.0"></script>
+<script type="module" src="./app.js?v=0.4.0"></script>
 </body>
 </html>

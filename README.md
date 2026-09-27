@@ -1,60 +1,73 @@
-# Forecast Local · Polymarket v0.3
+# Forecast Local · Polymarket v0.4
 
-## Corrección crítica respecto a v0.3
+Aplicación estática para GitHub Pages. GitHub entrega únicamente HTML/CSS/JS; la consulta de Polymarket, IndexedDB, Cache Storage y la inferencia ONNX ocurren en el navegador del usuario.
 
-La v0.3 **sí abría y cargaba el evento**, pero la portada seguía visible porque
-las reglas CSS:
+## Cambios principales de v0.4
 
-```css
-.landing { display:flex }
-.workspace { display:grid }
-```
+- **Análisis por outcome/token**: analizar Lula ya no elimina el pronóstico de Flávio, ni viceversa.
+- El botón de cada fila tiene estados:
+  - `Analizar`
+  - `Analizando…`
+  - `Ocultar`
+  - `Mostrar`
+  - `Actualizar` cuando existen datos posteriores al análisis guardado.
+- Los análisis se guardan en **IndexedDB** y se recuperan al volver al evento.
+- `selected` y `visible` son estados separados: seleccionar un outcome para inspeccionarlo no borra ni oculta los demás.
+- **Horizonte seleccionable**: 3, 7 o 14 días; 7 días por defecto. Los modelos generan hasta 64 pasos y el selector solo muestra el tramo correspondiente.
+- **Esquema temporal principal** para series con al menos 28 días (112 puntos de 6 h):
+  - TRAIN: todo lo anterior
+  - VALID: 7 días (28 pasos)
+  - TEST: 7 días (28 pasos)
+  - FORECAST: 3/7/14 días según selector
+- **Fallback para series jóvenes**: 70% / 15% / 15%.
+- Para cada outcome, cada modelo se carga **una sola vez** durante el análisis y ejecuta en la misma sesión los contextos VALID, TEST y FORECAST.
+- Chronos-2 y TimesFM-3 siguen físicamente aislados en iframes/runtimes distintos.
+- Eje Y en **porcentaje**, sin título.
+- Eje X Plotly adaptable al nivel de zoom, con fecha y año en líneas separadas cuando corresponde.
+- Zonas visuales pastel para ENTRENAMIENTO, VALIDACIÓN, PRUEBA y PRONÓSTICO.
+- Los modelos se distinguen por **tipo de línea**, no por color:
+  - observado: sólido
+  - Chronos-2: guiones
+  - TimesFM-3: puntos
+- El **color identifica al outcome/mercado**, por lo que una misma serie conserva su color en observado y en ambos modelos.
+- El panel derecho usa iconos monocromos y neutrales para los modelos, evitando asociar colores de candidato con modelos.
+- `Comparar modelos` muestra MAE, RMSE y dirección sobre el tramo TEST.
 
-podían prevalecer visualmente sobre el estado `hidden` usado por JavaScript.
+## Almacenamiento
 
-v0.3 añade:
+IndexedDB `forecast-local-polymarket`, versión 2:
 
-```css
-[hidden] { display:none !important; }
-```
+- `search`
+- `events`
+- `history`
+- `analysis`
 
-y además cambia de vista mediante funciones explícitas `showLanding()` /
-`showWorkspace()`.
+Los históricos conservan TTL de 7 días. Los análisis son pequeños y permanecen hasta `Borrar datos y análisis` o `Borrar todo`.
 
-Por eso, cuando el log superior dice `Abriendo mercado…`, la portada desaparece
-de inmediato y aparece el workspace con gráfico + panel lateral mientras se
-descargan los históricos.
+Cache Storage:
 
-# Forecast Local · Polymarket v0.3
+- `forecast-local-models-v1`
 
-Corrección de navegación del MVP.
+Se usa para los ONNX cuando `Conservar modelos descargados` está activo.
 
-## Qué cambió respecto a v0.1
+## Publicación
 
-- Un resultado de búsqueda abre el workspace **inmediatamente** con la metadata ya recibida por `public-search`.
-- Si esa respuesta ya incluye mercados + token IDs, no se hace una segunda consulta bloqueante a Gamma.
-- Si falta metadata, se intenta `/events/{id}`, `/events?id=...` y `/events?slug=...` en segundo plano.
-- El histórico del mercado seleccionado se descarga primero y el gráfico aparece tan pronto como está listo.
-- Las siguientes 3 series se descargan en paralelo, sin bloquear la interfaz.
-- Estados de carga/error visibles tanto globalmente como sobre el gráfico.
-- Se eliminó la falsa barra de búsqueda central; existe un único buscador real, arriba.
-- Resultados accesibles por clic, Enter o espacio.
+Descomprime el ZIP en la raíz del repositorio de GitHub Pages y reemplaza la versión anterior. No requiere build.
 
-## Arquitectura
+Después del deploy verifica que arriba aparezca **Local v0.4** y haz `Ctrl+F5` una vez para evitar archivos antiguos del navegador.
 
-GitHub Pages solo entrega código. El navegador usa Gamma/CLOB, IndexedDB y los runtimes ONNX locales.
+## Flujo esperado
 
-Chronos-2: ORT WASM/CPU aislado.
-TimesFM-3: ORT WebGPU aislado.
+1. Buscar un evento.
+2. Abrirlo.
+3. Cargar históricos.
+4. Pulsar `Analizar` en un outcome, por ejemplo Flávio.
+5. Esperar Chronos y TimesFM.
+6. Pulsar `Analizar` en otro outcome, por ejemplo Lula.
+7. El gráfico conserva **ambos** pronósticos.
+8. `Ocultar`/`Mostrar` cambia visibilidad sin volver a inferir.
+9. Cambiar 3/7/14 días reutiliza el forecast ya calculado; no vuelve a cargar los modelos.
 
-## Publicar
+## Interpretación
 
-Descomprime el ZIP en la raíz del repo y reemplaza los archivos de v0.1. No requiere build. Haz Ctrl+F5 una vez desplegada.
-
-## Prueba mínima
-
-1. Escribe `elec`.
-2. Haz clic en `Brazil Presidential Election`.
-3. Debe abrirse inmediatamente la pantalla del evento, aun antes de terminar de bajar históricos.
-4. Debes ver mensajes `Cargando histórico...` sobre el gráfico.
-5. Luego deben aparecer progresivamente las líneas.
+Los modelos pronostican la trayectoria futura del precio/probabilidad implícita del mercado seleccionado. Las métricas comparan esa trayectoria con observaciones retenidas fuera del contexto del modelo; no son una evaluación de candidatos ni una predicción independiente de quién resolverá el evento.
