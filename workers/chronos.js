@@ -15,7 +15,7 @@ async function bytesFromCache(url,persist){
   return r.arrayBuffer();
 }
 function feeds(values){
-  const a=values.slice(-512).map(Number),pad=512-a.length;
+  const a=values.slice(-128).map(Number),pad=512-a.length;
   const context=new Float32Array(512);context.fill(NaN);
   const mask=new Float32Array(512);
   for(let i=0;i<a.length;i++){context[pad+i]=a[i];mask[pad+i]=1;}

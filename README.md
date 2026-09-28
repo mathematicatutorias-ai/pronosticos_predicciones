@@ -1,102 +1,113 @@
-# Forecast Local · Polymarket v0.5
+# Forecast Local · v0.6
 
-Aplicación estática para GitHub Pages. GitHub sirve únicamente HTML/CSS/JS; búsqueda, almacenamiento, traducción compatible e inferencia ocurren en el navegador.
+## Cambio matemático principal
 
-## Novedades v0.5
+v0.6 elimina TRAIN/VALID del análisis local. Chronos-2 y TimesFM-3 son modelos preentrenados: la aplicación solo les entrega contexto histórico y obtiene un pronóstico.
 
-### Portada útil
-- Feed de eventos activos.
-- “Más activos en 24 h” por defecto.
-- Temas: Política, Deportes, Cripto, Finanzas, Geopolítica, Tecnología, Cultura y Clima.
-- Tarjetas con imagen, volumen 24 h, fecha de cierre, número de mercados y outcomes principales.
-- Guardados y recientes locales.
+Para que ambos modelos sean comparables, la aplicación usa la misma geometría experimental:
 
-### Búsqueda
-- Usa `public-search` de Gamma.
-- Si Chrome ofrece Translator API, una consulta en español puede traducirse localmente al inglés y buscar ambas formas.
-- Resultados deduplicados y ordenados por relevancia + volumen 24 h.
-- Títulos se traducen localmente al español cuando la Translator API está disponible.
+- Contexto: hasta **128 puntos**
+- Salida: hasta **64 puntos**
+- Chronos-2 se limita deliberadamente a los últimos 128 puntos útiles aunque su tensor ONNX admita una ventana mayor.
+- TimesFM-3 ya usa 128 puntos.
 
-### Mercado
-- Título e imagen enlazan al evento original en Polymarket.
-- Panel de mercado con:
-  - probabilidad,
-  - cambio 24 h,
-  - volumen 24 h,
-  - volumen total,
-  - liquidez,
-  - bid/ask,
-  - spread,
-  - estado y fecha final.
-- Reglas/resolución cuando Gamma las devuelve.
+## Resolución temporal adaptativa
 
-### Gráfico
-- Y siempre parte en 0%.
-- Techo dinámico según las series y bandas visibles, con límite máximo 100%.
-- Eje X adaptable con año en salto de línea según escala.
-- Zonas de ENTRENAMIENTO / VALIDACIÓN / PRUEBA / PRONÓSTICO.
-- VALID 7 días + TEST 7 días para series suficientemente largas.
-- Fallback 70/15/15 para series jóvenes.
-- Forecast 3 / 7 / 14 días.
-- Múltiples outcomes analizados pueden permanecer visibles simultáneamente.
+La aplicación ya no está atada a 6 horas.
 
-### Persistencia local
-IndexedDB v3:
-- search
-- events
-- history
-- analysis
-- translations
-- bookmarks
-- recent
-- tags
+1. Mantiene y grafica todo el histórico disponible.
+2. Escoge una resolución entre:
+   - 10 min, 15 min, 30 min
+   - 1 h, 2 h, 3 h, 4 h, 6 h, 8 h, 12 h
+   - máximo 1 día
+3. Escoge la resolución más gruesa que todavía permita, cuando sea posible, formar:
+   - 128 puntos de contexto
+   - 64 puntos de prueba
+4. Dentro de cada ventana usa la **mediana**.
+5. El último bloque usa el último precio observado para representar el estado actual.
+6. Los huecos se completan por arrastre del último precio para mantener una serie regular.
 
-Modelos ONNX:
-- Cache Storage `forecast-local-models-v1`
+Para mercados jóvenes (<14 días), la app intenta descargar historia con `fidelity=10` minutos para aprovechar la mayor densidad disponible.
 
-### Avisos
-La interfaz incluye un footer y modal con:
-- herramienta independiente;
-- fuente de datos: APIs públicas de Polymarket;
-- no afiliación;
-- modelos experimentales;
-- no asesoría financiera;
-- privacidad y almacenamiento local.
+## Dos instancias separadas
 
-## Arquitectura
+### 1. Prueba retrospectiva
 
 ```text
-GitHub Pages
-  └── navegador
-       ├── Gamma API → búsqueda, eventos, tags, metadata
-       ├── CLOB API  → históricos
-       ├── IndexedDB → históricos, análisis, traducciones, guardados
-       ├── Cache Storage → ONNX
-       ├── Chrome Translator API → traducción local opcional
-       ├── Chronos-2 → ORT WASM / CPU
-       └── TimesFM-3 → ORT WebGPU / GPU
+datos anteriores | CONTEXTO 128 | PRUEBA hasta 64
+   blanco             azul             rojo
 ```
+
+- Si existen 128 + 64 puntos: prueba completa.
+- Si existen más de 128 pero menos de 192: prueba parcial.
+- Si no existen suficientes puntos para una prueba retrospectiva, el forecast final puede seguir ejecutándose.
+
+Métricas:
+- MAE
+- RMSE
+- cobertura empírica de q10–q90
+- amplitud media q10–q90
+
+q10–q90 se describe como **intervalo predictivo nominal del 80%**, no como intervalo de confianza.
+
+### 2. Pronóstico real
+
+```text
+datos anteriores | CONTEXTO final hasta 128 | PRONÓSTICO hasta 64
+   blanco                  azul                    amarillo
+```
+
+El contexto final usa la información más reciente disponible. El tramo de prueba retrospectiva no se excluye del forecast real.
+
+## Horizonte
+
+La interfaz ofrece:
+- **7 días** cuando la resolución permite alcanzarlos.
+- **16 días** cuando la resolución permite alcanzarlos.
+- Si ni siquiera 7 días caben dentro de los 64 pasos, se muestran los 64 pasos completos y la UI indica el horizonte máximo disponible.
+
+## Gráfico
+
+- Serie completa visible.
+- Eje Y parte siempre en 0%.
+- Límite superior dinámico.
+- Etiquetas porcentuales en el eje Y izquierdo **y derecho**.
+- Selector:
+  - `Pronóstico`
+  - `Prueba`
+- Fondo:
+  - blanco = datos no usados por esa corrida
+  - azul = contexto
+  - rojo = prueba
+  - amarillo = pronóstico
+
+## Portada
+
+La portada ya no está dominada por una sola categoría de gran volumen.
+
+En `Destacados` se muestra **un evento por categoría**:
+- Política
+- Deportes
+- Cripto
+- Finanzas
+- Geopolítica
+- Tecnología
+- Cultura
+- Clima
+
+Cada tarjeta corresponde al evento activo de mayor volumen 24 h recuperado para esa categoría.
+
+Al entrar en una categoría sí se muestran varios eventos de ese tema, ordenados por volumen 24 h.
 
 ## Publicación
 
-Descomprime el ZIP en la raíz del repositorio y reemplaza la versión anterior. No requiere build.
+Reemplaza el contenido de la versión anterior en GitHub Pages.
 
-Después del deploy usa `Ctrl+F5` y confirma que arriba aparece `Local v0.5`.
-
-## Pruebas recomendadas
-
-1. Abrir portada y confirmar que aparecen eventos.
-2. Pulsar Política/Cripto/Deportes.
-3. Buscar `venezuela` y luego `elecciones`.
-4. Abrir un evento.
-5. Comprobar que título/imagen abren Polymarket en otra pestaña.
-6. Verificar eje Y dinámico.
-7. Analizar dos outcomes del mismo evento y confirmar que ambos pronósticos permanecen visibles.
-8. Guardar un evento, volver a portada y comprobar `Guardados y recientes`.
-9. Revisar pestaña Local y botones de borrado.
-
-## Fuente y condiciones
-
-Polymarket publica documentación para desarrolladores y describe sus datos de descubrimiento como públicos. Forecast Local no usa marca ni login de Polymarket y se identifica como herramienta independiente.
-
-Los datos y reglas oficiales siguen perteneciendo a sus fuentes originales y se enlaza a Polymarket para verificación.
+Después del deploy:
+1. `Ctrl+F5`
+2. confirma `Local v0.6`
+3. abre un mercado largo y uno joven
+4. prueba `Analizar`
+5. alterna `Pronóstico / Prueba`
+6. comprueba las etiquetas Y a ambos lados
+7. analiza dos outcomes y confirma que ambos forecasts continúan visibles

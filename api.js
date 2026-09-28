@@ -1,4 +1,4 @@
-import {getItem,putItem} from "./db.js?v=0.5.0";
+import {getItem,putItem} from "./db.js?v=0.6.0";
 
 const GAMMA="https://gamma-api.polymarket.com";
 const CLOB="https://clob.polymarket.com";
@@ -200,17 +200,50 @@ export function resample6h(points){
   for(let t=sorted[0].t;t<=sorted.at(-1).t;t+=bucket){while(j<sorted.length&&sorted[j].t<=t){last=sorted[j].p;j++;}out.push({t,p:last});}
   return out;
 }
+async function fetchHistoryWindow(tokenId,{fidelity=60,startTs=null,endTs=null}={}){
+  const qs=new URLSearchParams({market:String(tokenId),fidelity:String(fidelity)});
+  if(startTs!=null&&endTs!=null){qs.set("startTs",String(startTs));qs.set("endTs",String(endTs));}
+  else qs.set("interval","max");
+  const d=await fetchJSON(`${CLOB}/prices-history?${qs.toString()}`,{timeout:45000});
+  return d.history||[];
+}
+function historyDurationDays(raw){
+  if(!raw?.length)return 0;
+  const xs=raw.map(x=>+x.t).filter(Number.isFinite);
+  if(xs.length<2)return 0;
+  return (Math.max(...xs)-Math.min(...xs))/86400;
+}
 export async function getTokenHistory(tokenId,{force=false}={}){
   if(!tokenId)throw new Error("Este mercado no expone token YES.");
   const key=String(tokenId),cached=await getItem("history",key);
   if(cached&&!force&&Date.now()-cached.updatedAt<HISTORY_FRESH)return cached.value;
-  let existing=cached?.value?.raw||[],fresh=[];const now=Math.floor(Date.now()/1000);
-  if(existing.length){
+
+  let existing=cached?.value?.raw||[],fresh=[],fidelity=cached?.value?.fidelity||60;
+  const now=Math.floor(Date.now()/1000);
+
+  if(existing.length&&!force){
     const maxTs=Math.max(...existing.map(x=>+x.t)),start=Math.max(0,maxTs-12*3600);
-    try{fresh=(await fetchJSON(`${CLOB}/prices-history?market=${encodeURIComponent(tokenId)}&startTs=${start}&endTs=${now}&fidelity=60`,{timeout:35000})).history||[];}
-    catch{fresh=(await fetchJSON(`${CLOB}/prices-history?market=${encodeURIComponent(tokenId)}&interval=max&fidelity=60`,{timeout:35000})).history||[];existing=[];}
-  }else fresh=(await fetchJSON(`${CLOB}/prices-history?market=${encodeURIComponent(tokenId)}&interval=max&fidelity=60`,{timeout:35000})).history||[];
-  const raw=mergeHistory(existing,fresh),six=resample6h(raw),value={raw,six};
-  await putItem("history",key,value,{ttlMs:HISTORY_TTL});return value;
+    try{fresh=await fetchHistoryWindow(tokenId,{fidelity,startTs:start,endTs:now});}
+    catch{fresh=await fetchHistoryWindow(tokenId,{fidelity:60});existing=[];fidelity=60;}
+  }else{
+    fresh=await fetchHistoryWindow(tokenId,{fidelity:60});existing=[];fidelity=60;
+  }
+
+  let raw=mergeHistory(existing,fresh);
+
+  // Mercados jóvenes: pedimos una historia más densa para que el método adaptativo
+  // pueda construir hasta 128 + 64 observaciones sin inventar una frecuencia fija.
+  // Polymarket expresa fidelity en minutos; 10 min es el modo denso que usamos aquí.
+  const days=historyDurationDays(raw);
+  if(days>0&&days<14){
+    try{
+      const dense=await fetchHistoryWindow(tokenId,{fidelity:10});
+      if(dense.length>raw.length){raw=mergeHistory([],dense);fidelity=10;}
+    }catch(e){console.debug("Dense history unavailable; using hourly history.",e);}
+  }
+
+  const value={raw,six:resample6h(raw),fidelity};
+  await putItem("history",key,value,{ttlMs:HISTORY_TTL});
+  return value;
 }
 export {GAMMA,CLOB};

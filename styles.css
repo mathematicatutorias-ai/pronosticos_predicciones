@@ -17,3 +17,13 @@
 
 @media(max-width:1200px){.event-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.topic-cards{grid-template-columns:repeat(5,minmax(0,1fr))}.recent-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.hero-card{grid-template-columns:1fr 340px}.workspace{grid-template-columns:1fr}.main-col{border-right:0}.rail{border-top:1px solid var(--line)}}
 @media(max-width:800px){.topbar{padding:0 12px;grid-template-columns:auto 1fr auto;gap:9px}.brand span:last-child{display:none}.category-nav{padding:0 12px;gap:18px}.landing-shell{padding:12px}.hero-card{grid-template-columns:1fr;padding:18px}.local-summary{border-left:0;border-top:1px solid #dfe6f2;padding:14px 0 0}.hero-card h1{font-size:28px}.event-cards{grid-template-columns:1fr}.topic-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.recent-cards{grid-template-columns:1fr}.main-col,.rail{padding:12px}.event-head{grid-template-columns:58px 1fr}.event-image{width:58px;height:58px}.horizon-control{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap}.horizon-copy{display:none}.chart{height:390px}.chart-title-row{display:block}.series-legend{justify-content:flex-start;margin-top:8px}.table-title-row{display:block}.market-filter{min-width:0;margin-top:8px}.table-head{display:none}.market-row{grid-template-columns:1fr auto;gap:7px}.market-row>*:nth-child(3),.market-row>*:nth-child(4),.market-row>*:nth-child(5){display:none}.site-footer{padding:16px 12px}.footer-links{flex-wrap:wrap}}
+
+/* v0.6 */
+.chart-controls{display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.view-switch{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.view-switch button{border:0;border-right:1px solid var(--line);background:#fff;color:#667085;padding:7px 11px;font-size:10px;font-weight:750}
+.view-switch button:last-child{border-right:0}
+.view-switch button.active{background:#eef4ff;color:#155eef}
+.horizon-buttons button:disabled{opacity:.38;cursor:not-allowed;background:#f2f4f7;color:#98a2b3;border-color:#e4e7ec}
+.event-card .category-badge{position:absolute;left:8px;top:8px;background:rgba(255,255,255,.94);border:1px solid #e4e7ec;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:800;color:#344054}
+@media(max-width:800px){.chart-controls{align-items:flex-start;margin-top:8px}}
