@@ -4,42 +4,101 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
+  <meta name="description" content="Explorador y laboratorio local de mercados predictivos con datos públicos.">
   <title>Forecast Local</title>
-  <link rel="stylesheet" href="./styles.css?v=0.4.0">
+  <link rel="stylesheet" href="./styles.css?v=0.5.0">
   <script src="https://cdn.plot.ly/plotly-3.1.0.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-locale-es-latest.js"></script>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <a class="brand" href="./"><span class="brandmark">⌁</span><span>Forecast Local</span></a>
+    <a id="brandHome" class="brand" href="./"><span class="brandmark">⌁</span><span>Forecast Local</span></a>
     <div class="search-wrap">
       <span class="search-icon">⌕</span>
-      <input id="searchInput" autocomplete="off" placeholder="Buscar eventos o mercados…">
+      <input id="searchInput" autocomplete="off" placeholder="Buscar mercados, eventos o países…">
       <button id="searchClear" class="icon-btn" hidden>×</button>
       <div id="searchResults" class="search-results" hidden></div>
     </div>
-    <div class="local-pill"><span></span> Local <small>v0.4</small></div>
+    <div class="local-pill"><span></span> Local <small>v0.5</small></div>
   </header>
 
   <div id="openStatus" class="open-status" hidden></div>
 
   <main id="landing" class="landing">
-    <div class="landing-inner">
-      <div class="landing-kicker">DATOS + MODELOS · EN TU DISPOSITIVO</div>
-      <h1>Consulta cualquier mercado.<br>Analízalo localmente.</h1>
-      <p>El navegador consulta los datos públicos, conserva históricos en IndexedDB y ejecuta Chronos-2 y TimesFM-3 en tu propio dispositivo.</p>
-      <button id="focusTopSearch" class="landing-cta">Buscar un mercado ↑</button>
-      <div class="landing-foot"><span>Sin cuenta</span><i></i><span>Sin servidor de inferencia</span><i></i><span>Datos locales borrables</span></div>
-    </div>
+    <nav id="categoryNav" class="category-nav" aria-label="Temas">
+      <button class="active" data-category="">Más activos</button>
+      <button data-category="politics">Política</button>
+      <button data-category="sports">Deportes</button>
+      <button data-category="crypto">Cripto</button>
+      <button data-category="finance">Finanzas</button>
+      <button data-category="geopolitics">Geopolítica</button>
+      <button data-category="tech">Tecnología</button>
+      <button data-category="culture">Cultura</button>
+      <button data-category="weather">Clima</button>
+    </nav>
+
+    <section class="landing-shell">
+      <div class="hero-card">
+        <div>
+          <div class="landing-kicker">DATOS PÚBLICOS · ANÁLISIS LOCAL</div>
+          <h1>Explora mercados y analízalos localmente.</h1>
+          <p>Consulta datos públicos, conserva históricos en tu dispositivo y ejecuta Chronos-2 y TimesFM-3 sin un servidor de inferencia.</p>
+          <div class="hero-features">
+            <span>◉ Datos públicos</span><span>▣ Histórico local</span><span>⌁ Modelos locales</span>
+          </div>
+        </div>
+        <aside class="local-summary">
+          <div class="summary-title">Tu dispositivo</div>
+          <div class="summary-grid">
+            <div><strong id="homeHistoryCount">—</strong><small>Series guardadas</small></div>
+            <div><strong id="homeAnalysisCount">—</strong><small>Análisis</small></div>
+            <div><strong id="homeModelCount">—</strong><small>Archivos de modelos</small></div>
+            <div><strong id="homeStorageUsage">—</strong><small>Uso local</small></div>
+          </div>
+        </aside>
+      </div>
+
+      <section class="feed-section">
+        <div class="section-head">
+          <div><h2 id="feedTitle">Más activos en 24 h</h2><p id="feedSubtitle">Eventos activos ordenados por actividad reciente.</p></div>
+          <button id="refreshFeed" class="text-btn">Actualizar ↻</button>
+        </div>
+        <div id="feedStatus" class="feed-status">Cargando mercados…</div>
+        <div id="eventCards" class="event-cards"></div>
+      </section>
+
+      <section class="topic-section">
+        <div class="section-head"><div><h2>Temas destacados</h2><p>Accesos rápidos a filtros públicos de Polymarket.</p></div></div>
+        <div id="topicCards" class="topic-cards">
+          <button data-category=""><b>🔥</b><span>Más activos</span></button>
+          <button data-category="politics"><b>🏛</b><span>Política</span></button>
+          <button data-category="sports"><b>●</b><span>Deportes</span></button>
+          <button data-category="crypto"><b>₿</b><span>Cripto</span></button>
+          <button data-category="finance"><b>▥</b><span>Finanzas</span></button>
+          <button data-category="geopolitics"><b>◎</b><span>Geopolítica</span></button>
+          <button data-category="tech"><b>⌘</b><span>Tecnología</span></button>
+          <button data-category="culture"><b>◇</b><span>Cultura</span></button>
+          <button data-category="weather"><b>☁</b><span>Clima</span></button>
+        </div>
+      </section>
+
+      <section class="recent-section">
+        <div class="section-head"><div><h2>Guardados y recientes</h2><p>Solo existe en este navegador.</p></div></div>
+        <div id="recentCards" class="recent-cards"></div>
+      </section>
+    </section>
   </main>
 
   <main id="workspace" class="workspace" hidden>
     <section class="main-col">
       <div class="event-head">
-        <img id="eventImage" class="event-image" alt="">
+        <a id="eventImageLink" target="_blank" rel="noopener"><img id="eventImage" class="event-image" alt=""></a>
         <div class="event-copy">
-          <h1 id="eventTitle">—</h1>
+          <div class="event-title-line">
+            <a id="eventTitleLink" target="_blank" rel="noopener"><h1 id="eventTitle">—</h1></a>
+            <button id="bookmarkEvent" class="bookmark-btn" title="Guardar localmente">☆</button>
+          </div>
           <div id="eventMeta" class="muted small"></div>
         </div>
         <div class="horizon-control">
@@ -75,7 +134,7 @@
           <div class="market-filter"><span>⌕</span><input id="marketFilter" placeholder="Buscar outcome o mercado…"></div>
         </div>
         <div class="table-head">
-          <span>Outcome / mercado</span><span>Probabilidad</span><span>Estado</span><span>Modelos</span><span>Actualización</span><span></span>
+          <span>Outcome / mercado</span><span>Probabilidad</span><span>Δ 24 h</span><span>Vol. 24 h</span><span>Estado</span><span></span>
         </div>
         <div id="marketRows"></div>
       </section>
@@ -90,7 +149,7 @@
           <div id="selectedPrice" class="selected-price">—</div>
         </div>
       </div>
-      <a id="sourceLink" class="source-link" href="#" target="_blank" rel="noopener">Abrir mercado fuente ↗</a>
+      <a id="sourceLink" class="source-link" href="#" target="_blank" rel="noopener">Abrir en Polymarket ↗</a>
 
       <div class="tabs">
         <button class="tab active" data-tab="market">Mercado</button>
@@ -102,11 +161,19 @@
         <div class="panel">
           <h3>Resumen del mercado</h3>
           <div class="kv"><span>Probabilidad actual</span><b id="mCurrent">—</b></div>
-          <div class="kv"><span>Volumen</span><b id="mVolume">—</b></div>
+          <div class="kv"><span>Cambio 24 h</span><b id="mChange24">—</b></div>
+          <div class="kv"><span>Volumen 24 h</span><b id="mVolume24">—</b></div>
+          <div class="kv"><span>Volumen total</span><b id="mVolume">—</b></div>
+          <div class="kv"><span>Liquidez</span><b id="mLiquidity">—</b></div>
+          <div class="kv"><span>Bid / Ask</span><b id="mBidAsk">—</b></div>
+          <div class="kv"><span>Spread</span><b id="mSpread">—</b></div>
           <div class="kv"><span>Estado</span><b id="mStatus">—</b></div>
           <div class="kv"><span>Fin</span><b id="mEnd">—</b></div>
-          <div class="kv"><span>Resolución local</span><b>6 horas</b></div>
         </div>
+        <details id="rulesPanel" class="rules-panel">
+          <summary>Reglas y resolución</summary>
+          <div id="rulesText" class="rules-text">No hay información adicional disponible.</div>
+        </details>
         <div class="rail-note">Los porcentajes son precios/probabilidades implícitas del mercado. Los modelos pronostican esa trayectoria de precio, no la resolución del evento.</div>
       </section>
 
@@ -116,7 +183,6 @@
           <p>Este outcome todavía no ha sido analizado.</p>
           <button id="analyzeSelected" class="primary-btn">Analizar ahora</button>
         </div>
-
         <div id="forecastResults" hidden>
           <div class="panel">
             <div class="section-label" id="forecastHorizonLabel">HORIZONTE: 7 DÍAS</div>
@@ -154,15 +220,26 @@
           <button id="clearModels" class="ghost-danger">Borrar modelos</button>
           <button id="clearAll" class="danger">Borrar todo</button>
         </div>
-        <p class="rail-note">Los históricos tienen una vigencia local de 7 días. Los análisis son pequeños y se conservan hasta que los borres; si llegan nuevos datos quedan marcados para actualizar.</p>
+        <p class="rail-note">Los históricos tienen una vigencia local de 7 días. Los análisis se conservan localmente hasta que los borres; si llegan nuevos datos quedan marcados para actualizar.</p>
       </section>
     </aside>
   </main>
 
+  <footer class="site-footer">
+    <div><b>Forecast Local</b> · herramienta independiente. Datos de mercado: <a href="https://docs.polymarket.com/" target="_blank" rel="noopener">APIs públicas de Polymarket</a>.</div>
+    <div>No afiliado ni respaldado por Polymarket · Pronósticos experimentales · No constituye asesoría financiera.</div>
+    <div class="footer-links"><button id="aboutOpen">Acerca de</button><button id="privacyOpen">Privacidad local</button><a href="https://polymarket.com/tos" target="_blank" rel="noopener">Términos de Polymarket ↗</a></div>
+  </footer>
+
+  <dialog id="infoDialog" class="info-dialog">
+    <button id="dialogClose" class="dialog-close">×</button>
+    <div id="dialogBody"></div>
+  </dialog>
+
   <div id="toast" class="toast" hidden></div>
-  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.4.0" hidden></iframe>
-  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.4.0" hidden></iframe>
+  <iframe id="chronosFrame" src="./workers/chronos.html?v=0.5.0" hidden></iframe>
+  <iframe id="timesfmFrame" src="./workers/timesfm.html?v=0.5.0" hidden></iframe>
 </div>
-<script type="module" src="./app.js?v=0.4.0"></script>
+<script type="module" src="./app.js?v=0.5.0"></script>
 </body>
 </html>
