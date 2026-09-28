@@ -1,8 +1,8 @@
-# Forecast Local · v0.6
+# Forecast Local · v0.6.1
 
 ## Cambio matemático principal
 
-v0.6 elimina TRAIN/VALID del análisis local. Chronos-2 y TimesFM-3 son modelos preentrenados: la aplicación solo les entrega contexto histórico y obtiene un pronóstico.
+v0.6.1 elimina TRAIN/VALID del análisis local. Chronos-2 y TimesFM-3 son modelos preentrenados: la aplicación solo les entrega contexto histórico y obtiene un pronóstico.
 
 Para que ambos modelos sean comparables, la aplicación usa la misma geometría experimental:
 
@@ -105,7 +105,7 @@ Reemplaza el contenido de la versión anterior en GitHub Pages.
 
 Después del deploy:
 1. `Ctrl+F5`
-2. confirma `Local v0.6`
+2. confirma `Local v0.6.1.1`
 3. abre un mercado largo y uno joven
 4. prueba `Analizar`
 5. alterna `Pronóstico / Prueba`

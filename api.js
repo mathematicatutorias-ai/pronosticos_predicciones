@@ -169,7 +169,7 @@ function unwrapEvents(data){
   return data?.events||data?.items||[];
 }
 export async function getLandingEvents({categorySlug="",limit=12}={}){
-  const cacheKey=`feed:${categorySlug||"all"}`,cached=await getItem("events",cacheKey);
+  const cacheKey=`feed:${categorySlug||"all"}:limit:${limit}`,cached=await getItem("events",cacheKey);
   if(cached)return cached.value;
   let tag=null;if(categorySlug)tag=await getTagBySlug(categorySlug);
   const tagPart=tag?.id?`&tag_id=${encodeURIComponent(tag.id)}`:"";

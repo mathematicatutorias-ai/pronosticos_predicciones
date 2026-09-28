@@ -1,7 +1,7 @@
-import {searchPolymarket,loadSearchItem,getTokenHistory,previewSearchItem,getLandingEvents} from "./api.js?v=0.6.0";
-import {clearAllData,clearEverything,pruneExpired,storageEstimate,countStore,getItem,putItem,deleteItem,listItems} from "./db.js?v=0.6.0";
-import {runChronosBatch,runTimesFMBatch,clearModelCaches} from "./model-bridge.js?v=0.6.0";
-import {toSpanish,queryToEnglish} from "./i18n.js?v=0.6.0";
+import {searchPolymarket,loadSearchItem,getTokenHistory,previewSearchItem,getLandingEvents} from "./api.js?v=0.6.1";
+import {clearAllData,clearEverything,pruneExpired,storageEstimate,countStore,getItem,putItem,deleteItem,listItems} from "./db.js?v=0.6.1";
+import {runChronosBatch,runTimesFMBatch,clearModelCaches} from "./model-bridge.js?v=0.6.1";
+import {toSpanish,queryToEnglish} from "./i18n.js?v=0.6.1";
 
 const $=id=>document.getElementById(id);
 const COLORS=["#155eef","#f04438","#f5b700","#12b76a","#7a5af8","#ee46bc","#6172f3","#f79009","#0ba5ec","#667085"];
@@ -148,8 +148,8 @@ async function loadLandingFeed(category=state.landingCategory){
   state.landingCategory=category;
   document.querySelectorAll("#categoryNav [data-category]").forEach(b=>b.classList.toggle("active",b.dataset.category===category));
   if(!category){await loadHighlights();return}
-  $("feedTitle").textContent=CATEGORY_NAMES[category];$("feedSubtitle").textContent=`Eventos activos de ${CATEGORY_NAMES[category].toLowerCase()}, ordenados por volumen 24 h.`;$("feedStatus").hidden=false;$("feedStatus").textContent="Cargando mercados…";$("eventCards").innerHTML="";
-  try{state.landingEvents=await getLandingEvents({categorySlug:category,limit:12});state.landingEvents.forEach(e=>{e._categorySlug=category;e._categoryName=CATEGORY_NAMES[category]});renderLandingEvents();$("feedStatus").hidden=true;state.landingEvents.forEach(maybeTranslateEntity)}
+  $("feedTitle").textContent=CATEGORY_NAMES[category];$("feedSubtitle").textContent=`Top 10 de eventos activos de ${CATEGORY_NAMES[category].toLowerCase()}, ordenados por volumen 24 h.`;$("feedStatus").hidden=false;$("feedStatus").textContent="Cargando mercados…";$("eventCards").innerHTML="";
+  try{state.landingEvents=await getLandingEvents({categorySlug:category,limit:10});state.landingEvents.forEach(e=>{e._categorySlug=category;e._categoryName=CATEGORY_NAMES[category]});renderLandingEvents();$("feedStatus").hidden=true;state.landingEvents.forEach(maybeTranslateEntity)}
   catch(e){$("feedStatus").textContent=`No pude cargar esta categoría: ${e.message}`}
 }
 function renderLandingEvents(){
@@ -239,6 +239,8 @@ function renderVisibleSeries(){
 function chartVisibility(m,i){const a=state.analyses.get(m.yesToken);if(a)return a.visible;return state.baseVisible.has(m.yesToken)&&i<8}
 function hexAlpha(hex,a){const h=hex.replace("#","");return`rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`}
 function niceUpper(maxY){if(!Number.isFinite(maxY)||maxY<=0)return1;const padded=maxY*1.08;let step=.1;if(maxY<=1)step=.1;else if(maxY<=5)step=.5;else if(maxY<=10)step=1;else if(maxY<=25)step=2.5;else if(maxY<=60)step=5;else step=10;return Math.min(100,Math.max(step,Math.ceil(padded/step)*step))}
+function yTickStep(maxY){if(maxY<=1)return .1;if(maxY<=5)return .5;if(maxY<=10)return 1;if(maxY<=25)return 2.5;if(maxY<=60)return 5;return 10}
+function yTicks(maxY){const step=yTickStep(maxY),vals=[];for(let v=0;v<=maxY+1e-9;v+=step)vals.push(+v.toFixed(4));return vals}
 function selectedAnalysis(){const m=state.selected,a=m?state.analyses.get(m.yesToken):null;return a?{m,a}:null}
 function renderChart(){
   if(!state.event)return;const traces=[],allY=[];
@@ -262,11 +264,11 @@ function renderChart(){
       rect(d.backContextStartT,d.testStartT,"rgba(47,107,255,.06)");rect(d.testStartT,d.testEndT,"rgba(240,68,56,.09)");ann((d.backContextStartT+d.testStartT)*500,"CONTEXTO · 128 puntos");ann((d.testStartT+d.testEndT)*500,`PRUEBA · ${d.testN}/64`)
     }
   }
-  const finite=allY.filter(Number.isFinite),ymax=niceUpper(finite.length?Math.max(...finite):1);
+  const finite=allY.filter(Number.isFinite),ymax=niceUpper(finite.length?Math.max(...finite):1),tickvals=yTicks(ymax),ticktext=tickvals.map(v=>`${v}%`);
   Plotly.react("chart",traces,{template:"plotly_white",margin:{l:55,r:55,t:8,b:52},hovermode:"x unified",showlegend:false,shapes,annotations,
     xaxis:{showgrid:true,gridcolor:"#eef1f5",zeroline:false,automargin:true,tickformatstops:[{dtickrange:[null,86400000],value:"%H:%M<br>%d %b"},{dtickrange:[86400000,604800000],value:"%d %b<br>%Y"},{dtickrange:[604800000,2678400000],value:"%d %b<br>%Y"},{dtickrange:[2678400000,7776000000],value:"%b<br>%Y"},{dtickrange:[7776000000,null],value:"%b %Y"}]},
-    yaxis:{range:[0,ymax],ticksuffix:"%",showgrid:true,gridcolor:"#eef1f5",zeroline:false,automargin:true,title:null},
-    yaxis2:{range:[0,ymax],ticksuffix:"%",overlaying:"y",side:"right",showgrid:false,zeroline:false,automargin:true,title:null,matches:"y"}
+    yaxis:{range:[0,ymax],tickmode:"array",tickvals,ticktext,showticklabels:true,showgrid:true,gridcolor:"#eef1f5",zeroline:false,automargin:true,title:null},
+    yaxis2:{range:[0,ymax],tickmode:"array",tickvals,ticktext,showticklabels:true,overlaying:"y",side:"right",showgrid:false,zeroline:false,automargin:true,title:null,matches:"y"}
   },{responsive:true,displaylogo:false,locale:"es",scrollZoom:true,modeBarButtonsToRemove:["lasso2d","select2d"]})
 }
 function switchTab(name){document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));document.querySelectorAll(".tab-panel").forEach(x=>x.classList.remove("active"));$(`tab-${name}`).classList.add("active");if(name==="local")refreshStorage()}

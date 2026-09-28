@@ -1,4 +1,4 @@
-import {getItem,putItem} from "./db.js?v=0.6.0";
+import {getItem,putItem} from "./db.js?v=0.6.1";
 
 const translators=new Map();
 const TTL=90*24*60*60*1000;
