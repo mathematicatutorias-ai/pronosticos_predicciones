@@ -1,5 +1,7 @@
 # Forecast Local · v0.6.1
 
+https://mathematicatutorias-ai.github.io/pronosticos_predicciones/
+
 ## Cambio matemático principal
 
 v0.6.1 elimina TRAIN/VALID del análisis local. Chronos-2 y TimesFM-3 son modelos preentrenados: la aplicación solo les entrega contexto histórico y obtiene un pronóstico.
